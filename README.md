@@ -36,7 +36,7 @@ This insurance claims support agent follows a fixed four-phase SOP (`VERIFY_ID â
 | **Memory across phases** | Each claim hint, intent, and email preference is a slot that records the turn and phase where it was captured and later used. You can watch this in the Inspector. |
 | **Grounded answers** | Every reply goes through an output guard that checks for leaks, unsupported amounts, dates and claim IDs, echoed PII, and required content. A failing reply is retried once and then replaced by a deterministic template. |
 | **Beyond the brief** | Representative consent with polling and timeout, graded emotional support, email preview with a mock Outbox, human handoff tickets, deadline math, and document alternatives. |
-| **Evidence** | 560 backend tests, 53 frontend tests, and 8 of 8 live-model scripts passing on `gpt-4.1-mini` with zero leaks ([report](backend/evals/results/REPORT.md)). |
+| **Evidence** | 560 backend tests, 54 frontend tests, and 8 of 8 live-model scripts passing on `gpt-4.1-mini` with zero leaks ([report](backend/evals/results/REPORT.md)). |
 
 ## Quick start
 
@@ -226,7 +226,7 @@ The [demo script](docs/DEMO_SCRIPT.md) lists the inputs and the expected results
 
 ```sh
 (cd backend && uv run pytest -q)                      # 560 tests
-(cd frontend && npm test -- --run && npm run build)   # 53 tests
+(cd frontend && npm test -- --run && npm run build)   # 54 tests
 make lint && (cd frontend && npm run lint)           # ruff, mypy, eslint
 make eval                                             # live model, needs a key in .env
 ```
