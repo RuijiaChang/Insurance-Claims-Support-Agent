@@ -28,7 +28,7 @@ export default function TopBar({ config, userSettings, onOpenKeyDialog, onReset,
   } else if (config?.has_server_key) {
     keyStatus = (
       <span>
-        Using demo key &middot;{" "}
+        Using demo key{config.model ? ` · ${config.model}` : ""} &middot;{" "}
         <button type="button" onClick={onOpenKeyDialog} className={linkCls}>
           bring your own key
         </button>

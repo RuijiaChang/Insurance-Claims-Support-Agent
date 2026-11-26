@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { clearSettings, loadSettings, saveSettings, validateKey } from "../api";
+import { ApiError, clearSettings, loadSettings, saveSettings, validateKey } from "../api";
 import type { ModelSettings, Provider } from "../types";
 
 interface Props {
@@ -8,6 +8,21 @@ interface Props {
   onClose: () => void;
   onChanged: () => void;
 }
+
+/** Placeholder for the optional Model field: the backend default for each preset. */
+const DEFAULT_MODEL: Record<Provider, string> = {
+  openai: "gpt-4.1-mini",
+  deepseek: "deepseek-chat",
+  custom: "model name",
+};
+
+const VALIDATE_ERRORS: Record<string, string> = {
+  auth: "Key rejected",
+  rate_limit: "Rate limited — try again shortly",
+  timeout: "Timed out",
+  model_unavailable: "This key can't use that model",
+  other: "Couldn't connect",
+};
 
 type TestState = { kind: "idle" } | { kind: "testing" } | { kind: "ok" } | { kind: "failed"; message: string };
 
@@ -37,20 +52,25 @@ export default function KeyDialog({ open, notice, onClose, onChanged }: Props) {
 
   if (!open) return null;
 
-  const current = (): ModelSettings => ({
-    provider,
-    apiKey: apiKey.trim(),
-    ...(provider === "custom" ? { baseUrl: baseUrl.trim() || undefined, model: model.trim() || undefined } : {}),
-  });
-  const hasKey = apiKey.trim().length > 0;
+  const current = (): ModelSettings => {
+    const s: ModelSettings = { provider, apiKey: apiKey.trim() };
+    if (provider === "custom" && baseUrl.trim()) s.baseUrl = baseUrl.trim();
+    if (model.trim()) s.model = model.trim();
+    return s;
+  };
+  const isCustom = provider === "custom";
+  const complete = apiKey.trim().length > 0 && (!isCustom || (baseUrl.trim().length > 0 && model.trim().length > 0));
 
   const runTest = async () => {
     setTest({ kind: "testing" });
     try {
       const r = await validateKey(current());
-      setTest(r.ok ? { kind: "ok" } : { kind: "failed", message: r.error || "The key was rejected." });
-    } catch {
-      setTest({ kind: "failed", message: "Could not reach the server. Please try again." });
+      setTest(
+        r.ok ? { kind: "ok" } : { kind: "failed", message: VALIDATE_ERRORS[r.error ?? ""] ?? VALIDATE_ERRORS.other },
+      );
+    } catch (error) {
+      const detail = error instanceof ApiError ? error.detail : undefined;
+      setTest({ kind: "failed", message: detail ?? "Could not reach the server. Please try again." });
     }
   };
 
@@ -74,6 +94,7 @@ export default function KeyDialog({ open, notice, onClose, onChanged }: Props) {
               value={provider}
               onChange={(e) => {
                 setProvider(e.target.value as Provider);
+                setModel(""); // a model name rarely carries over between providers
                 setTest({ kind: "idle" });
               }}
             >
@@ -96,17 +117,36 @@ export default function KeyDialog({ open, notice, onClose, onChanged }: Props) {
               }}
             />
           </label>
-          {provider === "custom" && (
-            <>
-              <label className="block text-sm font-medium">
-                Base URL
-                <input className={field} value={baseUrl} placeholder="https://api.example.com/v1" onChange={(e) => setBaseUrl(e.target.value)} />
-              </label>
-              <label className="block text-sm font-medium">
-                Model
-                <input className={field} value={model} placeholder="model name" onChange={(e) => setModel(e.target.value)} />
-              </label>
-            </>
+          {isCustom && (
+            <label className="block text-sm font-medium">
+              Base URL
+              <input
+                className={field}
+                required
+                value={baseUrl}
+                placeholder="https://api.example.com/v1"
+                onChange={(e) => {
+                  setBaseUrl(e.target.value);
+                  setTest({ kind: "idle" });
+                }}
+              />
+            </label>
+          )}
+          <label className="block text-sm font-medium">
+            Model
+            <input
+              className={field}
+              required={isCustom}
+              value={model}
+              placeholder={DEFAULT_MODEL[provider]}
+              onChange={(e) => {
+                setModel(e.target.value);
+                setTest({ kind: "idle" });
+              }}
+            />
+          </label>
+          {!isCustom && (
+            <p className="-mt-2 text-xs text-slate-500">Optional — leave blank to use {DEFAULT_MODEL[provider]}.</p>
           )}
         </div>
         <div className="mt-3 min-h-[1.25rem] text-sm" role="status">
@@ -118,7 +158,7 @@ export default function KeyDialog({ open, notice, onClose, onChanged }: Props) {
           <button
             type="button"
             onClick={runTest}
-            disabled={!hasKey || test.kind === "testing"}
+            disabled={!complete || test.kind === "testing"}
             className="rounded-md border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
           >
             Test connection
@@ -141,7 +181,7 @@ export default function KeyDialog({ open, notice, onClose, onChanged }: Props) {
           </button>
           <button
             type="button"
-            disabled={!hasKey}
+            disabled={!complete}
             onClick={() => {
               saveSettings(current());
               onChanged();

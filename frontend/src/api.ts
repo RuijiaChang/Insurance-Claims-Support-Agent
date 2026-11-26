@@ -29,6 +29,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
+    /** Human-readable reason from the backend, when it sent one (e.g. invalid_provider). */
+    public detail?: string,
   ) {
     super(code);
   }
@@ -87,16 +89,18 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
   if (!res.ok) {
     let code = "unknown";
+    let detail: string | undefined;
     try {
-      const data = (await res.json()) as { code?: string };
+      const data = (await res.json()) as { code?: string; detail?: unknown };
       if (typeof data.code === "string") code = data.code;
+      if (typeof data.detail === "string") detail = data.detail;
     } catch {
       /* non-JSON error body */
     }
     if (res.status === 404) throw new SessionExpired();
     if (res.status === 401) throw new MissingKey();
     if (res.status === 429 && code === "demo_quota_exceeded") throw new QuotaExceeded();
-    throw new ApiError(res.status, code);
+    throw new ApiError(res.status, code, detail);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

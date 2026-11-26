@@ -24,7 +24,8 @@ beforeEach(() => {
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (url) => {
     if (url === "/api/config") return response({
-      has_server_key: true, demo_today: "2026-03-05", consent_scenarios: ["default", "timeout"],
+      has_server_key: true, provider: "openai", model: "gpt-4.1-mini",
+      demo_today: "2026-03-05", consent_scenarios: ["default", "timeout"],
     });
     if (url === "/api/sessions/s1") return new Response(null, { status: 204 });
     if (url === "/api/sessions") return response({
@@ -111,7 +112,8 @@ it("restarts the poll interval after a transient failure", async () => {
   await start();
   fetchMock.mockResolvedValueOnce(response({}, 503));
   await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
-  expect(screen.getByText(/Something went wrong/)).toBeTruthy();
+  // A single failed background poll is retried silently: no error bubble.
+  expect(screen.queryByText(/Something went wrong|Lost connection/)).toBeNull();
   fetchMock.mockResolvedValueOnce(response({
     messages: [], quick_replies: [], state: {
       ...snapshot,
@@ -147,4 +149,47 @@ it("returns keyboard focus to the inspector trigger when the drawer closes", asy
   fireEvent.keyDown(document.activeElement!, { key: "Escape" });
   expect(open.getAttribute("aria-expanded")).toBe("false");
   expect(document.activeElement).toBe(open);
+});
+
+it("stops polling after three consecutive failures and resumes on Retry", async () => {
+  await start();
+  fetchMock.mockResolvedValueOnce(response({}, 503));
+  fetchMock.mockResolvedValueOnce(response({}, 503));
+  fetchMock.mockResolvedValueOnce(response({}, 503));
+  for (let i = 0; i < 3; i++) {
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+  }
+  expect(requests("POST", "/api/sessions/s1/events")).toHaveLength(3);
+  expect(screen.getAllByText(/Lost connection to the server/)).toHaveLength(1);
+  expect(screen.queryByText(/Something went wrong/)).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(20000); });
+  expect(requests("POST", "/api/sessions/s1/events")).toHaveLength(3);
+  fetchMock.mockResolvedValueOnce(response({
+    messages: [{ role: "agent", text: "Still waiting" }], quick_replies: [], state: snapshot, llm_error: null,
+  }));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Retry" })); });
+  expect(requests("POST", "/api/sessions/s1/events")).toHaveLength(4);
+  expect(screen.getByText("Still waiting")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  // Polling resumes on its normal interval, and the failure count starts over.
+  fetchMock.mockResolvedValueOnce(response({}, 503));
+  await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+  expect(requests("POST", "/api/sessions/s1/events")).toHaveLength(5);
+  expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+});
+
+it("shows the server model next to the demo key", async () => {
+  await start();
+  expect(screen.getByText(/Using demo key · gpt-4\.1-mini/)).toBeTruthy();
+});
+
+it("shows a notice bubble when a reply fell back to templates", async () => {
+  await start();
+  fetchMock.mockResolvedValueOnce(response({
+    messages: [{ role: "agent", text: "Template reply" }], quick_replies: [], state: snapshot,
+    llm_error: "model_unavailable",
+  }));
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: replies[0].label })); });
+  expect(screen.getByText(/selected model isn't available for this key/)).toBeTruthy();
+  expect(screen.queryByRole("dialog")).toBeNull();
 });

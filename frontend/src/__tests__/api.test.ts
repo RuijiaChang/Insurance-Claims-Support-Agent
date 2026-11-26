@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ApiError,
   MissingKey,
   QuotaExceeded,
   SessionExpired,
@@ -40,6 +41,13 @@ describe("api error mapping", () => {
     const err = await sendMessage("x", { text: "hi" }).catch((e) => e);
     expect(err).not.toBeInstanceOf(QuotaExceeded);
     expect(err).toBeInstanceOf(Error);
+  });
+  it("carries a string detail on ApiError", async () => {
+    mockFetch(400, { code: "invalid_provider", detail: "Base URL must use https" });
+    const err = await getConfig().catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe("invalid_provider");
+    expect(err.detail).toBe("Base URL must use https");
   });
   it("non-JSON error body does not throw a parse error", async () => {
     vi.stubGlobal(

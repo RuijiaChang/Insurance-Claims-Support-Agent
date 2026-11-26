@@ -64,7 +64,7 @@ export interface Snapshot {
   events: TimelineEvent[];
 }
 
-export type LlmError = "auth" | "rate_limit" | "timeout" | "other";
+export type LlmError = "auth" | "model_unavailable" | "rate_limit" | "timeout" | "other";
 
 export interface TurnOut {
   messages: { role: string; text: string }[];

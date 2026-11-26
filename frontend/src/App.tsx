@@ -79,7 +79,7 @@ export default function App() {
   }, [boot]);
 
   const runTurn = useCallback(
-    async (request: (id: string) => Promise<TurnOut>, userText?: string) => {
+    async (request: (id: string) => Promise<TurnOut>, userText?: string, poll = false) => {
       const id = sessionRef.current;
       if (!id || busy.current) return;
       busy.current = true;
@@ -93,6 +93,8 @@ export default function App() {
           } catch {
             dispatch({ type: "turn_failed", reason: "other" });
           }
+        } else if (poll) {
+          dispatch({ type: "poll_failed" });
         } else {
           dispatch({ type: "turn_failed", reason: failure(error) });
         }
@@ -104,13 +106,20 @@ export default function App() {
   );
 
   const consentPending = state.snapshot?.sub_state === "CONSENT_PENDING";
+  const pollConsent = useCallback(
+    () => runTurn((id) => sendEvent(id, "consent_poll"), undefined, true),
+    [runTurn],
+  );
   useEffect(() => {
-    if (!state.sessionId || !consentPending || state.pending) return;
-    const timer = window.setTimeout(() => {
-      void runTurn((id) => sendEvent(id, "consent_poll"));
-    }, CONSENT_POLL_MS);
+    if (!state.sessionId || !consentPending || state.pending || state.pollStopped) return;
+    const timer = window.setTimeout(() => void pollConsent(), CONSENT_POLL_MS);
     return () => window.clearTimeout(timer);
-  }, [state.sessionId, state.snapshot, state.messages, state.pending, consentPending, runTurn]);
+  }, [state.sessionId, state.snapshot, state.messages, state.pending, state.pollFailures, state.pollStopped, consentPending, pollConsent]);
+
+  const retryPolling = () => {
+    dispatch({ type: "poll_retry" });
+    void pollConsent();
+  };
 
   const replaceSession = async (mode: ConsentScenario, preset?: Scenario) => {
     const previous = sessionRef.current;
@@ -199,6 +208,18 @@ export default function App() {
               Show inspector
             </button>
           </div>
+          {state.pollStopped && consentPending && (
+            <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+              <span>Consent status checks stopped after repeated connection errors.</span>
+              <button
+                type="button"
+                onClick={retryPolling}
+                className="rounded-md border border-amber-300 bg-white px-3 py-1 text-amber-900 hover:bg-amber-100"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <Chat
             messages={state.messages}
             quickReplies={state.quickReplies}

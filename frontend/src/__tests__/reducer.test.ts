@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { initialState, reducer } from "../reducer";
-import type { Snapshot, TurnOut } from "../types";
+import { initialState, LLM_NOTICES, MSG_LOST_CONNECTION, reducer } from "../reducer";
+import type { LlmError, Snapshot, TurnOut } from "../types";
 
 const snap = (phase: string) => ({ phase }) as unknown as Snapshot;
 
@@ -89,6 +89,59 @@ describe("reducer", () => {
       "Welcome",
     ]);
     expect(kept.pending).toBe(false);
+  });
+
+  const notices: [LlmError, string][] = [
+    ["auth", "The model provider rejected the API key."],
+    [
+      "model_unavailable",
+      "The selected model isn't available for this key; replies are using basic fallback templates. Open Model settings to choose another model.",
+    ],
+    ["rate_limit", "The model provider is rate-limiting requests; replies are using basic fallback templates for now."],
+    ["timeout", "The model didn't respond in time; this reply used a basic fallback template."],
+    ["other", "The model couldn't be reached; this reply used a basic fallback template."],
+  ];
+
+  it.each(notices)("llm_error=%s appends one system bubble after the reply", (kind, text) => {
+    expect(LLM_NOTICES[kind]).toBe(text);
+    const s = reducer(initialState, { type: "turn_succeeded", turn: turn({ llm_error: kind }) });
+    expect(s.messages).toEqual([
+      { role: "agent", text: "Hello" },
+      { role: "system", text },
+    ]);
+    expect(s.keyDialogOpen).toBe(kind === "auth");
+  });
+
+  it("does not repeat the same llm notice on consecutive turns", () => {
+    let s = reducer(initialState, { type: "turn_succeeded", turn: turn({ llm_error: "timeout" }) });
+    s = reducer(s, { type: "turn_succeeded", turn: turn({ llm_error: "timeout" }) });
+    const count = (st: typeof s) => st.messages.filter((m) => m.role === "system").length;
+    expect(count(s)).toBe(1);
+    s = reducer(s, { type: "turn_succeeded", turn: turn({ llm_error: "rate_limit" }) });
+    expect(count(s)).toBe(2);
+    s = reducer(s, { type: "turn_succeeded", turn: turn() });
+    s = reducer(s, { type: "turn_succeeded", turn: turn({ llm_error: "rate_limit" }) });
+    expect(count(s)).toBe(3);
+  });
+
+  it("a successful turn without llm_error adds no system bubble", () => {
+    const s = reducer(initialState, { type: "turn_succeeded", turn: turn() });
+    expect(s.messages.filter((m) => m.role === "system")).toEqual([]);
+  });
+
+  it("poll failures are silent until the cap, then one lost-connection bubble", () => {
+    let s = reducer(initialState, { type: "turn_started" });
+    s = reducer(s, { type: "poll_failed" });
+    expect(s.pending).toBe(false);
+    s = reducer(s, { type: "poll_failed" });
+    expect(s.messages).toEqual([]);
+    expect(s.pollStopped).toBe(false);
+    s = reducer(s, { type: "poll_failed" });
+    expect(s.pollStopped).toBe(true);
+    expect(s.messages).toEqual([{ role: "system", text: MSG_LOST_CONNECTION }]);
+    s = reducer(s, { type: "poll_retry" });
+    expect(s.pollStopped).toBe(false);
+    expect(s.pollFailures).toBe(0);
   });
 
   it("open/close key dialog", () => {
