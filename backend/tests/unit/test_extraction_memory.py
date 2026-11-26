@@ -185,3 +185,39 @@ def test_to_input_normalizes() -> None:
     assert i.case_id is None and i.year is None
     assert i.case_type == "healthcare" and not i.is_empty()
     assert CaseHints(case_id=" ", year=0).to_input().is_empty()
+
+
+def _copied_from_agent() -> Extraction:
+    # What gpt-4.1-mini returned live for "That's all, thanks" after the agent described
+    # the auto claim: every hint was lifted from the agent's own reply.
+    return Extraction(
+        case_hints=CaseHints(
+            case_type="auto",
+            status="open",
+            month=2,
+            year=2026,
+            free_text="Your open auto claim from February 28, 2026",
+        ),
+        acts=["done"],
+    )
+
+
+def test_reconcile_drops_case_hints_the_caller_did_not_say() -> None:
+    out = reconcile(_copied_from_agent(), RegexHits(), "That's all, thanks")
+    assert out.case_hints == CaseHints()
+
+
+def test_reconcile_keeps_case_hints_grounded_in_caller_words() -> None:
+    llm = Extraction(case_hints=CaseHints(case_type="auto", free_text="my car claim"))
+    out = reconcile(llm, RegexHits(), "And what about my car claim?")
+    assert out.case_hints.case_type == "auto" and out.case_hints.free_text == "my car claim"
+    llm = Extraction(case_hints=CaseHints(case_type="dental", month=11, free_text="dental thing"))
+    out = reconcile(llm, RegexHits(), "the dentist one from November")
+    assert out.case_hints.case_type == "dental" and out.case_hints.month == 11
+    assert out.case_hints.free_text is None  # not a quote of what they said
+
+
+def test_reconcile_keeps_case_hints_when_caller_selects_a_listed_option() -> None:
+    llm = _copied_from_agent().model_copy(update={"acts": ["select_case"]})
+    out = reconcile(llm, RegexHits(), "the second one")
+    assert out.case_hints.case_type == "auto"

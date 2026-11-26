@@ -45,7 +45,15 @@ def context_message(facts: dict[str, Any], directives: list[Directive]) -> str:
 
 def directives_reminder(directives: list[Directive]) -> str:
     kinds = ", ".join(f"{i}. {d.kind}" for i, d in enumerate(directives, start=1))
-    return f"Current DIRECTIVES, in order: {kinds or '(none)'}."
+    text = f"Current DIRECTIVES, in order: {kinds or '(none)'}."
+    # The output guard rejects a reply that drops this, so say it where the model looks last.
+    if any(
+        (d.kind == "decline_off_topic" and d.data.get("offer_handoff"))
+        or (d.kind == "offer_email" and d.data.get("handoff_pending"))
+        for d in directives
+    ):
+        text += " REQUIRED: say in words that you can connect them with a representative."
+    return text
 
 
 def _history(history: list[Message], user_text: str) -> list[dict[str, Any]]:

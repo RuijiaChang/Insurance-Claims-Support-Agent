@@ -94,7 +94,7 @@ The policy engine owns phase changes and claim permissions. The model extracts m
 make lint
 ```
 
-The automated tests use scripted model doubles. Run `make eval` with a working key in `.env` to evaluate the eight conversation scripts against a live model. The runner supports `--model`, `--scenario`, and `--report` when invoked as `uv run python -m evals.run_evals` from `backend/` with credentials exported. Runs write `backend/evals/results/latest.md` (gitignored) by default; regenerate the committed report with `--report evals/results/REPORT.md`. The runner now times caller-text turns only; the committed report predates that change, so its percentiles also include deterministic consent-poll and quick-reply turns. The recorded run on `gpt-4.1-mini` passed all eight scripts with zero detected leaks, guard retries, or model errors. See the [live evaluation report](backend/evals/results/REPORT.md).
+The automated tests use scripted model doubles. Run `make eval` with a working key in `.env` to evaluate the eight conversation scripts against a live model. The runner supports `--model`, `--scenario`, and `--report` when invoked as `uv run python -m evals.run_evals` from `backend/` with credentials exported. Runs write `backend/evals/results/latest.md` (gitignored) by default; regenerate the committed report with `--report evals/results/REPORT.md`. Latency percentiles cover caller-text turns only. The recorded run on `gpt-4.1-mini` passed all eight scripts with zero detected leaks, guard retries, or model errors. See the [live evaluation report](backend/evals/results/REPORT.md).
 
 ## Known limits
 

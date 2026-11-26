@@ -402,3 +402,13 @@ def test_off_topic_decline_steers_back_to_current_step(name: str) -> None:
 
     assert "always restate the current step's request" in load_prompt("system")
     assert "`decline_off_topic`" in load_prompt(name)
+
+
+def test_directives_reminder_requires_handoff_offer_when_directed() -> None:
+    from app.llm.responder import directives_reminder
+    from app.sop.plan import Directive
+
+    offer = [Directive(kind="decline_off_topic", data={"offer_handoff": True})]
+    plain = [Directive(kind="decline_off_topic", data={"offer_handoff": False})]
+    assert "representative" in directives_reminder(offer)
+    assert "representative" not in directives_reminder(plain)

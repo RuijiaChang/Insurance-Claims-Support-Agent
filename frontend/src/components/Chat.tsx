@@ -97,7 +97,7 @@ export default function Chat({ messages, quickReplies, pending, ready, draft, su
         <SuggestionChips
           suggestions={suggestions}
           disabled={pending || !ready}
-          onPick={(text) => { onDraft(text); inputRef.current?.focus(); }}
+          onPick={(text) => onSend(text)}
         />
         <div className="flex items-end gap-2">
           <textarea

@@ -358,7 +358,12 @@ def _anything_else(data: dict[str, Any], rctx: ResponderContext, ds: list[Direct
 def _offer_email(data: dict[str, Any], rctx: ResponderContext, ds: list[Directive]) -> str:
     to = data.get("to_masked")
     where = f" to {to}" if to else " to the email address on file"
-    return f"Would you like me to email a summary of our conversation{where}?"
+    lead = (
+        "I'll connect you with a representative. Before I do, w"
+        if data.get("handoff_pending")
+        else "W"
+    )
+    return f"{lead}ould you like me to email a summary of our conversation{where}?"
 
 
 def _email_preview(data: dict[str, Any], rctx: ResponderContext, ds: list[Directive]) -> str:

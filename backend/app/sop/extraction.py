@@ -170,6 +170,45 @@ def _grounded(field: str, value: str, text: str) -> bool:
 
 _GROUNDED_IDENTITY = ("full_name", "dob", "phone", "email", "id_last4", "policy_number")
 
+# Words a caller might use for each case hint; used only to check a hint is grounded.
+_HINT_WORDS = {
+    "healthcare": ("health", "medical", "hospital", "doctor", "clinic", "surgery", "biopsy"),
+    "dental": ("dental", "dentist", "tooth", "teeth", "crown", "orthodont"),
+    "auto": ("auto", "car", "vehicle", "accident", "collision", "crash"),
+    "denied": ("deni", "deny", "reject", "declin", "turned down"),
+    "closed": ("closed", "paid", "settled", "finished", "done"),
+    "open": ("open", "pending", "progress", "review", "ongoing"),
+}
+_MONTHS = (
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+)
+
+
+def _case_hints_grounded(h: CaseHints, text: str) -> bool:
+    """Does the caller's own message mention anything these case hints claim?"""
+    low = text.casefold()
+    if h.free_text and h.free_text.strip().casefold() in low:
+        return True
+    if h.case_id and _has_token(text, h.case_id):
+        return True
+    for value in (h.case_type, h.status):
+        if value and (value in low or any(w in low for w in _HINT_WORDS.get(value, ()))):
+            return True
+    if h.month and (_MONTHS[h.month - 1] in low or _has_token(text, str(h.month))):
+        return True
+    return bool(h.year and _has_token(text, str(h.year)))
+
 
 def reconcile(llm: Extraction | None, hits: RegexHits, user_text: str) -> Extraction:
     """Merge LLM extraction with regex hits; inputs are never mutated.
@@ -183,6 +222,14 @@ def reconcile(llm: Extraction | None, hits: RegexHits, user_text: str) -> Extrac
         value = getattr(out.identity, field)
         if value is not None and not _grounded(field, value, user_text):
             setattr(out.identity, field, None)
+    # Case hints get the same rule, except when the caller picks from options the agent
+    # listed ("the second one"): then the hints legitimately come from the agent's message.
+    if "select_case" not in out.acts:
+        hints = out.case_hints
+        if hints.free_text and hints.free_text.strip().casefold() not in user_text.casefold():
+            hints.free_text = None
+        if not _case_hints_grounded(hints, user_text):
+            out.case_hints = CaseHints()
     if hits.dob_raw:
         out.identity.dob = hits.dob_raw
     if hits.phone:

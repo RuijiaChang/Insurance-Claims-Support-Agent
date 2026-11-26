@@ -127,17 +127,23 @@ it("restarts the poll interval after a transient failure", async () => {
   expect(screen.getByText(/Granted/)).toBeTruthy();
 });
 
-it("fills the composer from a phase suggestion without sending it", async () => {
+it("sends a phase suggestion on click and hides it once sent", async () => {
   await start();
   await act(async () => {
     fireEvent.change(screen.getByLabelText("Scenario"), { target: { value: "off_topic" } });
   });
   const textarea = screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
   expect(textarea.value).toBe("What is reinforcement learning?");
-  fireEvent.click(screen.getByRole("button", { name: "Who won the World Cup?" }));
-  expect(textarea.value).toBe("Who won the World Cup?");
-  expect(document.activeElement).toBe(textarea);
-  expect(requests("POST", "/api/sessions/s1/messages")).toHaveLength(0);
+  fetchMock.mockResolvedValueOnce(response({ messages: [{ role: "agent", text: "Only claims." }], quick_replies: [], state: snapshot }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Who won the World Cup?" }));
+  });
+  const sent = requests("POST", "/api/sessions/s1/messages");
+  expect(sent).toHaveLength(1);
+  expect(JSON.parse(String(sent[0][1]?.body))).toEqual({ text: "Who won the World Cup?" });
+  expect(textarea.value).toBe("What is reinforcement learning?"); // the draft is left alone
+  expect(screen.queryByRole("button", { name: "Who won the World Cup?" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Can you write me a poem?" })).toBeTruthy();
 });
 
 it("returns keyboard focus to the inspector trigger when the drawer closes", async () => {

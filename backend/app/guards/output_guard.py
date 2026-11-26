@@ -252,6 +252,24 @@ def _pii_violations(reply: str, repo: FixtureRepo) -> list[str]:
     return found
 
 
+_HUMAN_RE = re.compile(r"\b(representative|human|person|specialist|agent|someone)\b", re.IGNORECASE)
+
+
+def _needs_handoff_mention(rctx: ResponderContext) -> bool:
+    return any(
+        (d.kind == "decline_off_topic" and d.data.get("offer_handoff"))
+        or (d.kind == "offer_email" and d.data.get("handoff_pending"))
+        for d in rctx.directives
+    )
+
+
+def _required_violations(reply: str, rctx: ResponderContext) -> list[str]:
+    """Content a directive requires: the caller must hear that a human is on offer."""
+    if _needs_handoff_mention(rctx) and not _HUMAN_RE.search(reply):
+        return ["missing_handoff_offer"]
+    return []
+
+
 def check_reply(
     reply: str, state: SessionState, rctx: ResponderContext, repo: FixtureRepo
 ) -> GuardResult:
@@ -264,5 +282,6 @@ def check_reply(
     if rctx.phase in _GROUNDED_PHASES:
         violations += _grounding_violations(reply, rctx.whitelist_text)
     violations += _pii_violations(reply, repo)
+    violations += _required_violations(reply, rctx)
     unique = list(dict.fromkeys(violations))
     return GuardResult(ok=not unique, violations=unique)

@@ -247,3 +247,10 @@ def test_confirm_without_preview_raises_explicit_error(repo: FixtureRepo, sop: S
     s.email.preview = None
     with pytest.raises(RuntimeError, match="preview"):
         _turn(s, repo, sop, action="email_confirm")
+
+
+def test_offer_flags_pending_handoff(repo: FixtureRepo, sop: SopConfig) -> None:
+    s = _state()
+    s.pending_handoff = "user_request"
+    step = _turn(s, repo, sop)
+    assert step.directives[0].data["handoff_pending"] is True

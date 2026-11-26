@@ -120,3 +120,12 @@ def test_email_preview_shows_subject_and_body() -> None:
     d = Directive(kind="email_preview", data={"draft": draft})
     text = render([d], _rctx([d]))
     assert "Your summary" in text and "- Call" in text and "\n\n" in text
+
+
+def test_offer_email_acknowledges_pending_handoff() -> None:
+    d = Directive(
+        kind="offer_email", data={"to_masked": "m*****@email.com", "handoff_pending": True}
+    )
+    text = render([d], _rctx([d]))
+    assert text.startswith("I'll connect you with a representative.")
+    assert "m*****@email.com" in text

@@ -226,7 +226,9 @@ export default function App() {
             pending={state.pending}
             ready={ready}
             draft={draft}
-            suggestions={suggestionsFor(scenario?.id ?? "", state.snapshot?.phase ?? "")}
+            suggestions={suggestionsFor(scenario?.id ?? "", state.snapshot?.phase ?? "").filter(
+              (s) => !state.messages.some((m) => m.role === "user" && m.text === s),
+            )}
             onDraft={setDraft}
             onSend={(text) => void runTurn((id) => sendMessage(id, { text }), text)}
             onQuickReply={(reply) => void runTurn((id) => sendMessage(id, { action: reply.action }), reply.label)}

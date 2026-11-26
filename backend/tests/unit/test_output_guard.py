@@ -185,3 +185,36 @@ def test_pre_access_normalized_record_dates_and_amounts(repo: FixtureRepo) -> No
     assert check_reply(
         "18 March 2026", state, _rctx(Phase.VERIFY_ID, user_text="My deadline is 2026-03-18"), repo
     ).ok
+
+
+def _with(rctx: ResponderContext, kind: str, **data: object) -> ResponderContext:
+    from app.sop.plan import Directive
+
+    rctx.directives.append(Directive(kind=kind, data=data))
+    return rctx
+
+
+def test_off_topic_handoff_offer_must_be_said(repo: FixtureRepo) -> None:
+    # Live gpt-4.1-mini dropped the offer and only the quick-reply button carried it.
+    s = _state(True, Phase.PROCESS_CASE)
+    rctx = _with(_rctx(), "decline_off_topic", offer_handoff=True)
+    bad = check_reply("I'm here to help with insurance claims. What else?", s, rctx, repo)
+    assert bad.violations == ["missing_handoff_offer"]
+    good = "I can only help with claims. I can also connect you with a representative."
+    assert check_reply(good, s, rctx, repo).ok
+    plain = _with(_rctx(), "decline_off_topic", offer_handoff=False)
+    assert check_reply("I can only help with claims.", s, plain, repo).ok
+
+
+def test_email_offer_before_handoff_must_acknowledge_it(repo: FixtureRepo) -> None:
+    s = _state(True, Phase.POST_PROCESS)
+    rctx = _with(
+        _rctx(Phase.POST_PROCESS), "offer_email", to_masked="m*****@x.com", handoff_pending=True
+    )
+    assert not check_reply("Want a summary at m*****@x.com?", s, rctx, repo).ok
+    assert check_reply(
+        "I'll connect you with a representative. Want a summary at m*****@x.com first?",
+        s,
+        rctx,
+        repo,
+    ).ok

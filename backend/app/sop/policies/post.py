@@ -94,7 +94,11 @@ def _offer(state: SessionState, to_masked: str) -> StepResult:
         directives=[
             Directive(
                 kind="offer_email",
-                data={"to_masked": to_masked, "preference": state.memory.get("email_preference")},
+                data={
+                    "to_masked": to_masked,
+                    "preference": state.memory.get("email_preference"),
+                    "handoff_pending": state.pending_handoff is not None,
+                },
             )
         ],
         quick_replies=_replies(_OFFER_REPLIES),
