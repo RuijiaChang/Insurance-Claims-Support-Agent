@@ -4,7 +4,7 @@ from datetime import date
 from typing import Any, Literal
 
 from app.data.repo import FixtureRepo
-from app.llm.base import ExtractContext, LLMBundle, LLMError, LLMErrorKind
+from app.llm.base import ExtractContext, LLMBundle, LLMError, LLMErrorKind, Responder
 from app.settings import SopConfig
 from app.sop import phases
 from app.sop.context import ResponderContext
@@ -85,14 +85,38 @@ class TemplateResponder:
         return render(rctx.directives, rctx)
 
 
+class ScriptedResponder:
+    """Returns scripted replies in order; an ``LLMError`` entry is raised instead.
+
+    Records every context and the feedback passed with each call.
+    """
+
+    def __init__(self, replies: list[str | LLMError]) -> None:
+        self.replies = list(replies)
+        self.contexts: list[ResponderContext] = []
+        self.feedback: list[list[str] | None] = []
+
+    def respond(self, rctx: ResponderContext, feedback: list[str] | None = None) -> str:
+        self.contexts.append(rctx)
+        self.feedback.append(feedback)
+        reply = self.replies.pop(0)
+        if isinstance(reply, LLMError):
+            raise reply
+        return reply
+
+
 class FakeEmailComposer(PassThroughComposer):
     """Returns the deterministic draft unchanged."""
 
 
-def make_bundle(script: dict[str, Extraction], raise_kind: LLMErrorKind | None = None) -> LLMBundle:
+def make_bundle(
+    script: dict[str, Extraction],
+    raise_kind: LLMErrorKind | None = None,
+    responder: Responder | None = None,
+) -> LLMBundle:
     return LLMBundle(
         extractor=FakeExtractor(script, raise_kind),
-        responder=TemplateResponder(),
+        responder=responder if responder is not None else TemplateResponder(),
         email_composer=FakeEmailComposer(),
     )
 

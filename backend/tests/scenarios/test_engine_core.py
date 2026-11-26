@@ -3,13 +3,14 @@ from typing import Any
 
 from app.data.repo import FixtureRepo
 from app.guards.output_guard import check_reply, sensitive_terms
+from app.llm.base import LLMError
 from app.settings import SopConfig
 from app.sop.engine import TurnResult
 from app.sop.extraction import Extraction
 from app.sop.phases import Phase
 from app.sop.state import SessionState
 from app.sop.templates import render
-from tests.fakes import TemplateResponder, ex, make_bundle, make_engine
+from tests.fakes import ScriptedResponder, TemplateResponder, ex, make_bundle, make_engine
 
 MARGARET_TEXT = (
     "Hi, I'm Margaret Chen, born March 15 1985, phone (650) 521-2836. "
@@ -119,6 +120,7 @@ def test_engine_s2b_same_reply_existing_vs_unknown(repo: FixtureRepo, sop: SopCo
     unknown = _one_turn(repo, sop, "I'm Zed Nobody", ex(identity={"full_name": "Zed Nobody"}))
 
     assert _identity_view(known) == _identity_view(unknown)
+    assert known.snapshot == unknown.snapshot
     assert "2 more" in _reply(known)
 
 
@@ -139,6 +141,7 @@ def test_three_fields_one_wrong_same_as_unknown(repo: FixtureRepo, sop: SopConfi
     )
 
     assert _identity_view(known) == _identity_view(unknown)
+    assert known.snapshot == unknown.snapshot
     assert _reply(known).startswith("I wasn't able to verify with that information")
     assert known.snapshot["verification_failures"] == unknown.snapshot["verification_failures"] == 1
 
@@ -231,6 +234,7 @@ def test_action_turn_skips_extractor(repo: FixtureRepo, sop: SopConfig) -> None:
     bundle = make_bundle({}, raise_kind="auth")
     result = engine.handle_turn(state, bundle, action="continue")
     assert result.llm_error is None
+    assert bundle.extractor.calls == []  # type: ignore[attr-defined]
 
 
 def test_snapshot_hides_pii_and_fingerprint(repo: FixtureRepo, sop: SopConfig) -> None:
@@ -286,3 +290,69 @@ def test_terminal_phase_skips_llm(repo: FixtureRepo, sop: SopConfig) -> None:
     assert result.llm_error is None
     assert "representative" in _reply(result)
     assert state.transcript == [] and state.events == []
+
+
+# --- Responder retry and template fallback -------------------------------------
+
+# A pre-access reply that names a real case id: the guard flags it as a leak.
+LEAKY = "Your claim CL-2048 was denied."
+TWO_FIELDS = "I'm Margaret Chen, DOB 1985-03-15"
+TWO_FIELDS_EX: dict[str, Any] = {"identity": {"full_name": "Margaret Chen", "dob": "1985-03-15"}}
+
+
+def _scripted_turn(
+    repo: FixtureRepo,
+    sop: SopConfig,
+    replies: list[str | LLMError],
+    raise_kind: Any = None,
+) -> tuple[TurnResult, ScriptedResponder, SessionState]:
+    responder = ScriptedResponder(replies)
+    bundle = make_bundle({TWO_FIELDS: ex(**TWO_FIELDS_EX)}, raise_kind, responder)
+    state = SessionState.new("s1")
+    result = make_engine(repo, sop).handle_turn(state, bundle, text=TWO_FIELDS)
+    return result, responder, state
+
+
+def test_retry_feedback_has_no_record_values(repo: FixtureRepo, sop: SopConfig) -> None:
+    ok = "To continue I need one more detail."
+    result, responder, _ = _scripted_turn(repo, sop, [LEAKY, ok])
+
+    assert responder.feedback[0] is None
+    feedback = responder.feedback[1]
+    assert feedback == ["leak"]
+    blob = json.dumps(feedback).lower()
+    for term in sensitive_terms(repo):
+        assert term.lower() not in blob, term
+    assert _reply(result) == ok
+
+
+def test_retry_second_attempt_ok_is_returned(repo: FixtureRepo, sop: SopConfig) -> None:
+    second = "Thanks, Margaret. I need one more detail to verify you."
+    result, responder, _ = _scripted_turn(repo, sop, [LEAKY, second])
+    assert len(responder.contexts) == 2
+    assert _reply(result) == second
+
+
+def test_both_attempts_violate_falls_back_to_template(repo: FixtureRepo, sop: SopConfig) -> None:
+    result, responder, state = _scripted_turn(repo, sop, [LEAKY, LEAKY])
+    rctx = responder.contexts[-1]
+    assert _reply(result) == render(rctx.directives, rctx)
+    assert "To protect your information I need 1 more of:" in _reply(result)
+    assert result.llm_error is None
+    assert not any(e.stage == "guard_template_violation" for e in state.events)
+
+
+def test_responder_error_falls_back_to_template(repo: FixtureRepo, sop: SopConfig) -> None:
+    result, responder, _ = _scripted_turn(repo, sop, [LLMError("timeout")])
+    rctx = responder.contexts[-1]
+    assert _reply(result) == render(rctx.directives, rctx)
+    assert result.llm_error == "timeout"
+
+
+def test_extractor_and_responder_errors_keep_extractor_kind(
+    repo: FixtureRepo, sop: SopConfig
+) -> None:
+    result, responder, _ = _scripted_turn(repo, sop, [LLMError("rate_limit")], raise_kind="auth")
+    rctx = responder.contexts[-1]
+    assert result.llm_error == "auth"
+    assert _reply(result) == render(rctx.directives, rctx)

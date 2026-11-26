@@ -117,6 +117,11 @@ def _ms(start: float) -> int:
     return int((time.perf_counter() - start) * 1000)
 
 
+def _categories(violations: list[str]) -> list[str]:
+    """Violation categories (the part before ":"), deduped and sorted; never a value."""
+    return sorted({v.split(":", 1)[0] for v in violations})
+
+
 def _last_agent_message(state: SessionState) -> str | None:
     return next((m.text for m in reversed(state.transcript) if m.role == "agent"), None)
 
@@ -185,13 +190,14 @@ class Engine:
 
         user_text = text or ""
         llm_error: LLMErrorKind | None = None
-        if user_text:
+        has_text = bool(user_text.strip())
+        if has_text:
             state.transcript.append(Message(role="user", text=user_text, turn=turn))
 
         # 1. Extraction: LLM reconciled with regex; regex alone if the LLM fails.
         start = time.perf_counter()
         source = "none"
-        if user_text.strip():
+        if has_text:
             hits = extract_regex(user_text)
             ectx = ExtractContext(
                 phase=state.phase,
@@ -262,7 +268,7 @@ class Engine:
                 self._event(state, turn, "guard", f"ok (attempt {attempt})", start)
                 return reply, llm_error
             # Categories only: a violation string can name the leaked record value.
-            categories = sorted({v.split(":", 1)[0] for v in guard.violations})
+            categories = _categories(guard.violations)
             self._event(
                 state,
                 turn,
@@ -271,12 +277,14 @@ class Engine:
                 start,
                 {"categories": categories},
             )
-            feedback = guard.violations
+            # Only categories reach the LLM: a raw violation names the record value it
+            # leaked (e.g. a real case id), which would itself leak before access (I2).
+            feedback = categories
 
         reply = render(rctx.directives, rctx)
         guard = check_reply(reply, state, rctx, self.repo)
         if not guard.ok:
-            categories = sorted({v.split(":", 1)[0] for v in guard.violations})
+            categories = _categories(guard.violations)
             self._event(
                 state,
                 turn,
