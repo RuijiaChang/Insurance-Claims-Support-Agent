@@ -129,3 +129,18 @@ def test_normalize_relationship() -> None:
         assert normalize_relationship(s) == "parent"
     for s in ["wife", "husband"]:
         assert normalize_relationship(s) == "spouse"
+
+
+def test_parse_dob_edge_cases() -> None:
+    assert parse_dob("3/15/45") == [date(1945, 3, 15)]
+    assert parse_dob("1985") == []
+    assert parse_dob("March 15") == []
+    assert parse_dob("15") == []
+    assert parse_dob("1985-03-05") == [date(1985, 3, 5)]
+    assert set(parse_dob("10/09/1964")) == {date(1964, 10, 9), date(1964, 9, 10)}
+
+
+def test_wrong_policy_number_falls_through(repo: FixtureRepo) -> None:
+    out = verify(good(), set(), "POL-0000", repo.policyholders, T, 3)
+    assert out.status == "pass"
+    assert out.party_id == "P9"

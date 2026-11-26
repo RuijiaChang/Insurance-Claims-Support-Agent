@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 import phonenumbers
@@ -43,15 +43,35 @@ def normalize_name(s: str) -> str:
     return " ".join(cleaned.split())
 
 
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_SENTINELS = (datetime(2000, 1, 1), datetime(2001, 2, 2))
+
+
+def _parse_full_date(s: str, dayfirst: bool) -> date | None:
+    """Parse a complete date; reject partial input and never return a future date."""
+    try:
+        a, b = (date_parser.parse(s, dayfirst=dayfirst, default=d) for d in _SENTINELS)
+    except (ValueError, OverflowError):
+        return None
+    if a != b:  # a component was missing and filled from the default
+        return None
+    d = a.date()
+    if d > date.today():  # two-digit years resolve into the past for a date of birth
+        try:
+            d = d.replace(year=d.year - 100)
+        except ValueError:  # Feb 29
+            d = d.replace(year=d.year - 100, day=28)
+    return d
+
+
 def parse_dob(s: str) -> list[date]:
     """Parse a date of birth; returns two candidates when month/day order is ambiguous."""
+    s = s.strip()
+    passes = (False,) if _ISO_DATE.match(s) else (False, True)
     results: list[date] = []
-    for dayfirst in (False, True):
-        try:
-            d = date_parser.parse(s, dayfirst=dayfirst).date()
-        except (ValueError, OverflowError):
-            continue
-        if d not in results:
+    for dayfirst in passes:
+        d = _parse_full_date(s, dayfirst)
+        if d is not None and d not in results:
             results.append(d)
     return results
 
@@ -125,7 +145,9 @@ def find_candidates(
     """Locate candidate holders: by policy number if given, else by any matching field."""
     if policy_number:
         key = policy_number.strip().upper()
-        return [h for h in holders if h.policy_number.upper() == key]
+        by_policy = [h for h in holders if h.policy_number.upper() == key]
+        if by_policy:
+            return by_policy
     fields = _provided(values, set())
     return [
         h for h in holders if any(field_matches(f, values[f], h, name_threshold) for f in fields)
