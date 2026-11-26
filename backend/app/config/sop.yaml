@@ -1,0 +1,24 @@
+verification:
+  min_matched_fields: 3
+  max_failures: 3
+  name_fuzzy_threshold: 90
+scope:
+  off_topic_offer_human_after: 3
+emotion:
+  persuasion_budget: 2
+  escalate_streak: 3
+consent:
+  poll_interval_sec: 4
+  max_resends: 1
+process:
+  max_tool_iterations: 3
+  doc_fuzzy_threshold: 85
+  max_hops: 3
+ratelimit:
+  per_ip_per_min: 20
+  per_ip_per_day: 300
+  global_per_day: 3000
+  max_turns_per_session: 60
+session:
+  ttl_min: 120
+  max_text_len: 4000
