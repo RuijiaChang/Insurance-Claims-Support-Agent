@@ -1,0 +1,12 @@
+services:
+  agent:
+    build: .
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "8000"
+      DEMO_TODAY: "${DEMO_TODAY:-2026-03-05}"
+    restart: unless-stopped
