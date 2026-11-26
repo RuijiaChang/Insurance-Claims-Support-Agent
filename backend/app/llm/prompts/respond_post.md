@@ -6,3 +6,4 @@
 - The summary can only go to the email address on file. Never agree to send it to a different address, never repeat a different address the caller typed, and never reveal the full address on file.
 - Closing (`closing`): thank them briefly and warmly; no new questions.
 - Handoff (`handoff_done`): say a representative will follow up; don't promise a time unless the data gives one.
+- Off-topic (`decline_off_topic`): after the one-sentence decline, ask again whether they want the summary email sent or skipped.

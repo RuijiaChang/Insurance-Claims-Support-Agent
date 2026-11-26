@@ -13,14 +13,14 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Open [the chat](http://localhost:8000). The health endpoint is [`/api/health`](http://localhost:8000/api/health). Compose can start with `.env` absent. Set `HOST_PORT` if port 8000 is occupied.
+Open [the chat](http://localhost:8000). The health endpoint is [`/api/health`](http://localhost:8000/api/health). Compose can start with `.env` absent (the optional `env_file` entry needs Docker Compose 2.24 or later). Set `HOST_PORT` if port 8000 is occupied.
 
 Provide an API key in either of two ways:
 
 1. Set `OPENAI_API_KEY` in `.env` before starting. The server uses that key for clients who supply no key.
-2. Open **Model settings** in the chat and enter your own key. It takes precedence over the server key. The browser keeps it in session storage and sends it with model requests. Select OpenAI, DeepSeek, or Custom. Custom requires a public HTTPS base URL and a model name.
+2. Open **Model settings** in the chat and enter your own key. It takes precedence over the server key. The browser keeps it in session storage and sends it with model requests. Select OpenAI, DeepSeek, or Custom. The optional **Model** field overrides the provider default; Custom requires a public HTTPS base URL and a model name. **Test connection** checks the key and model before you save.
 
-The default OpenAI model is `gpt-5-mini`. If your key cannot access that model, set `OPENAI_MODEL=gpt-4.1-mini` in `.env` or select a model your account can access. For a browser-supplied OpenAI key with a different model, select **Custom** and enter `https://api.openai.com/v1` and the model name.
+The default OpenAI model is `gpt-4.1-mini`, and the DeepSeek default is `deepseek-chat`. To use another model, set `OPENAI_MODEL` in `.env` for the server key, or enter it in the optional **Model** field of **Model settings** for a browser key. `gpt-5*` models require OpenAI organization verification; an unverified key gets an error, and the chat falls back to basic templates with a notice.
 
 ### Local development
 
@@ -32,7 +32,9 @@ Use Python 3.12, uv, and Node.js 20. Run from the repository root:
 make dev
 ```
 
-Open [the Vite app](http://localhost:5173). FastAPI runs on port 8000.
+Open [the Vite app](http://localhost:5173). FastAPI runs on port 8000. `LOG_LEVEL` sets the app's log level.
+
+For a one-turn live check of the configured key, run `set -a; . ../.env; set +a; uv run python scripts/smoke.py` from `backend/`.
 
 ### Settings and hosting
 
@@ -92,10 +94,11 @@ The policy engine owns phase changes and claim permissions. The model extracts m
 make lint
 ```
 
-The automated tests use scripted model doubles. Run `make eval` with a working key in `.env` to evaluate the eight conversation scripts against a live model. The runner supports `--model`, `--scenario`, and `--report` when invoked as `uv run python -m evals.run_evals` from `backend/` with credentials exported. The recorded run on `gpt-4.1-mini` passed all eight scripts with zero detected leaks, guard retries, or model errors. See the [live evaluation report](backend/evals/results/REPORT.md).
+The automated tests use scripted model doubles. Run `make eval` with a working key in `.env` to evaluate the eight conversation scripts against a live model. The runner supports `--model`, `--scenario`, and `--report` when invoked as `uv run python -m evals.run_evals` from `backend/` with credentials exported. Runs write `backend/evals/results/latest.md` (gitignored) by default; regenerate the committed report with `--report evals/results/REPORT.md`. The runner now times caller-text turns only; the committed report predates that change, so its percentiles also include deterministic consent-poll and quick-reply turns. The recorded run on `gpt-4.1-mini` passed all eight scripts with zero detected leaks, guard retries, or model errors. See the [live evaluation report](backend/evals/results/REPORT.md).
 
 ## Known limits
 
 - Single-worker, in-memory sessions and rate limits reset when the process restarts. The demo uses fixture data and simulated email, consent, and handoff.
 - Responses and fixtures are English-only. The output guard uses heuristic token checks and does not prove semantic grounding.
+- There is no cap on the number of in-memory sessions, and `/api/config/validate-key` is not rate limited (demo scope).
 - Custom endpoint DNS validation and the actual connection use separate resolutions, leaving a DNS rebinding window. Proxy IP handling assumes one trusted proxy that appends the client address.

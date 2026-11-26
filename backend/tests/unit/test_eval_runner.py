@@ -94,3 +94,23 @@ def test_eval_checks_outbox_content(repo, sop):
     result = run_scenario(scenario, Engine(repo, sop, date(2026, 3, 5), Outbox()), make_bundle({}))
     assert not result.passed
     assert any("outbox" in failure for failure in result.failures)
+
+
+def test_latency_counts_only_text_turns(repo, sop):
+    scenario = Scenario.model_validate(
+        {
+            "name": "latency",
+            "turns": [{"text": "Hello"}, {"event": "consent_poll"}, {"action": "handoff"}],
+            "expect": {"final_phase": "HANDOFF"},
+        }
+    )
+    result = run_scenario(scenario, Engine(repo, sop, date(2026, 3, 5), Outbox()), make_bundle({}))
+    assert len(result.transcript) == 3
+    assert len(result.latencies) == 1
+
+
+def test_default_report_path_is_not_the_committed_report():
+    from evals.run_evals import DEFAULT_REPORT
+
+    assert DEFAULT_REPORT.name == "latest.md"
+    assert DEFAULT_REPORT.parent.name == "results"

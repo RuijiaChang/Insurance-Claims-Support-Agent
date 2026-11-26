@@ -42,7 +42,7 @@ stateDiagram-v2
     CLOSED --> [*]
 ```
 
-A single turn can take up to three validated transitions. Each handler sees the same extraction, and the engine accumulates directives as it goes. The final plan determines which facts to load. Margaret's opening turn can verify identity, resolve the remembered January denied healthcare claim, and answer from CL-2048 in one response. Earlier turns and pending representative consent retain restricted context. System consent polls acknowledge changes without replaying the prior utterance through the workflow.
+A single turn can follow up to `max_hops` (3) validated transitions, so it runs at most `max_hops + 1` phase handlers; a global guard's continued transition counts against that budget. The last handler's own transition is still applied but not followed, so the phase can change at most `max_hops + 1` times in one turn. Each handler sees the same extraction, and the engine accumulates directives as it goes. The final plan determines which facts to load. Margaret's opening turn can verify identity, resolve the remembered January denied healthcare claim, and answer from CL-2048 in one response. Earlier turns and pending representative consent retain restricted context. System consent polls acknowledge changes without replaying the prior utterance through the workflow.
 
 ## Design choice
 

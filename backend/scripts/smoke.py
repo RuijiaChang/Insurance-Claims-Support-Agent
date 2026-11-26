@@ -1,9 +1,17 @@
 """Live smoke test: one real turn with Margaret's opener.
 
-Usage: ``OPENAI_API_KEY=... uv run python -m app.llm.smoke``. Exits non-zero without a key.
+Usage, from ``backend/`` with the key exported (``set -a; . ../.env; set +a``)::
+
+    uv run python scripts/smoke.py
+
+Exits non-zero without a key. This makes one live model call.
 """
 
 import sys
+from pathlib import Path
+
+# Run as a plain script: make the ``app`` package (backend/) importable.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.data.repo import load_repo
 from app.llm.client import LLMHeaders, MissingApiKey, resolve_provider

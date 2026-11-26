@@ -53,7 +53,7 @@ The intent vocabulary covers denial questions, status inquiries, document submis
 5. Generate a response, with at most three tool iterations during case processing.
 6. Screen the response, retry once after a guard violation, then fall back to a template if needed. Retain state and events for inspection.
 
-A turn may use the same extraction across up to three validated phase or substate hops. The plan accumulates directives. Access checks run against the resulting state, so a successful verification turn can immediately answer an identifiable case. The [architecture invariants](ARCHITECTURE.md#invariants) state which component owns transitions, which data can enter context, which tools can run, and what the responder can use.
+A turn may use the same extraction across up to three followed phase hops (`max_hops`), so at most four phase handlers run. The plan accumulates directives. Access checks run against the resulting state, so a successful verification turn can immediately answer an identifiable case. The [architecture invariants](ARCHITECTURE.md#invariants) state which component owns transitions, which data can enter context, which tools can run, and what the responder can use.
 
 ### 7.1 Extraction
 
@@ -121,7 +121,7 @@ Extract an emotion label and intensity on each turn. Track consecutive negative 
 
 ## 10. Model providers
 
-The OpenAI-compatible client supports OpenAI, DeepSeek, and Custom presets. Providers that support structured outputs and tools use those capabilities. Other providers use JSON-mode extraction with validation and deterministic guidance preparation. Provider configuration comes from server environment variables or request headers. A browser key takes precedence and uses its own provider settings. A server key works only with the server's configured provider and model.
+The OpenAI-compatible client supports OpenAI, DeepSeek, and Custom presets. Providers that support structured outputs and tools use those capabilities. Other providers use JSON-mode extraction with validation and deterministic guidance preparation. The default models are `gpt-4.1-mini` for OpenAI and `deepseek-chat` for DeepSeek; `gpt-5*` models need OpenAI organization verification and receive `reasoning_effort` instead of `temperature`. Provider configuration comes from server environment variables or request headers. A browser key takes precedence and uses its own provider settings. A server key works only with the server's configured provider and model.
 
 Custom URLs require HTTPS and publicly resolving addresses. The validation route sends a short model request to test the supplied credentials. The key stays in browser session storage when provided via UI. The backend keeps keys out of normal application logs and error payloads.
 
@@ -150,7 +150,7 @@ Typed actions take priority over model classification. Trimmed text must be none
 
 ## 13. Frontend
 
-A React reducer manages chat, request state, and the Inspector. The top bar contains the scenario and consent selectors, reset, demo date, and model settings. Nine presets prefill openers. The frontend supplies phase-based suggestion chips. Server-supplied quick replies send typed actions. The Inspector has state, memory, timeline, and Outbox panels and uses a drawer on narrow screens. Model settings supports OpenAI, DeepSeek, and Custom and can test a connection. It opens when a key is needed, including after a demo quota error.
+A React reducer manages chat, request state, and the Inspector. The top bar contains the scenario and consent selectors, reset, demo date, and model settings. Nine presets prefill openers. The frontend supplies phase-based suggestion chips. Server-supplied quick replies send typed actions. The Inspector has state, memory, timeline, and Outbox panels and uses a drawer on narrow screens. Model settings supports OpenAI, DeepSeek, and Custom, with an optional model override for every provider, and can test a connection. A reply that fell back to templates because of a model error carries one chat notice naming the cause. It opens when a key is needed, including after a demo quota error.
 
 ## 14. Configuration
 

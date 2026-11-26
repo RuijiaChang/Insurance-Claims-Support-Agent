@@ -23,6 +23,9 @@ from app.sop.engine import Engine
 from app.sop.state import SessionState
 from app.tools.email import Outbox
 
+# Ad-hoc runs write here (gitignored); results/REPORT.md is the committed recorded run.
+DEFAULT_REPORT = Path(__file__).parent / "results" / "latest.md"
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -101,7 +104,10 @@ def run_scenario(scenario: Scenario, engine: Engine, bundle: LLMBundle) -> Resul
             action=turn.action,
             event=turn.event,
         )
-        result.latencies.append(time.perf_counter() - started)
+        if turn.text is not None:
+            # p50/p95 describe caller-text turns: consent polls never call the model and
+            # quick-reply actions skip extraction, so counting them would understate latency.
+            result.latencies.append(time.perf_counter() - started)
         reply = "\n".join(m.text for m in out.messages)
         responses.append(reply)
         result.llm_errors += int(out.llm_error is not None)
@@ -214,7 +220,12 @@ def main() -> int:
     parser.add_argument(
         "--scenario", action="append", help="Scenario name; repeat to select several"
     )
-    parser.add_argument("--report", type=Path, default=Path(__file__).parent / "results/REPORT.md")
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=DEFAULT_REPORT,
+        help="Report path (default: evals/results/latest.md; the committed run is REPORT.md)",
+    )
     args = parser.parse_args()
     settings = Settings()
     if args.model:

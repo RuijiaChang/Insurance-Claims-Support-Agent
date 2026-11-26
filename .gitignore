@@ -9,3 +9,4 @@ frontend/dist/
 outbox/
 .superpowers/
 .DS_Store
+backend/evals/results/latest.md

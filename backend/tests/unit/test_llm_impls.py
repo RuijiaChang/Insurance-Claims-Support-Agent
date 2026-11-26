@@ -392,3 +392,13 @@ def test_factory_bundle_shares_one_client(repo: FixtureRepo, sop: SopConfig) -> 
     assert bundle.responder.client is client
     assert bundle.email_composer.client is client
     assert bundle.responder.max_tool_iterations == sop.process.max_tool_iterations
+
+
+@pytest.mark.parametrize(
+    "name", ["respond_verify", "respond_resolve", "respond_process", "respond_post"]
+)
+def test_off_topic_decline_steers_back_to_current_step(name: str) -> None:
+    from app.llm.prompts import load_prompt
+
+    assert "always restate the current step's request" in load_prompt("system")
+    assert "`decline_off_topic`" in load_prompt(name)
