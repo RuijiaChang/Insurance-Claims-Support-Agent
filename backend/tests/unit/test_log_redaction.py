@@ -71,3 +71,11 @@ def test_malformed_args_fall_back_to_redacted_message() -> None:
     record = cap.records[0]
     assert record.args == ()
     assert KEY not in record.getMessage()
+
+
+def test_non_string_message_is_redacted() -> None:
+    install_key_redaction()
+    log, cap = _logger("test.redaction.nonstr")
+    log.error(RuntimeError(f"boom {KEY}"))
+    out = logging.Formatter().format(cap.records[0])
+    assert KEY not in out and "boom sk-***" in out

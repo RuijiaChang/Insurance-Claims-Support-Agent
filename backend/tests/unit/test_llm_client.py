@@ -414,3 +414,19 @@ def test_blank_env_values_are_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "srv")
     cfg = resolve_provider(LLMHeaders(), Settings(_env_file=None))  # type: ignore[call-arg]
     assert cfg.model == "gpt-4.1-mini" and cfg.uses_server_key
+
+
+def test_short_custom_model_name_does_not_misclassify() -> None:
+    body = _err("Invalid 'messages': model input was malformed.", param="messages")
+    c, _, _ = _make(lambda r, n: httpx.Response(400, json=body), cfg=_cfg(model="m"))
+    with pytest.raises(LLMError) as ei:
+        c.chat([{"role": "user", "content": "x"}])
+    assert ei.value.kind == "other"
+
+
+def test_short_custom_model_name_still_matches_as_token() -> None:
+    body = _err("The model `m` is not available on this server.")
+    c, _, _ = _make(lambda r, n: httpx.Response(400, json=body), cfg=_cfg(model="m"))
+    with pytest.raises(LLMError) as ei:
+        c.chat([{"role": "user", "content": "x"}])
+    assert ei.value.kind == "model_unavailable"

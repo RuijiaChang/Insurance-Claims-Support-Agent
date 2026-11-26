@@ -144,6 +144,15 @@ describe("reducer", () => {
     expect(s.pollFailures).toBe(0);
   });
 
+  it("a successful chat turn clears a stopped poll", () => {
+    let s = reducer(initialState, { type: "poll_failed" });
+    s = reducer(s, { type: "poll_failed" });
+    s = reducer(s, { type: "poll_failed" });
+    expect(s.pollStopped).toBe(true);
+    s = reducer(s, { type: "turn_succeeded", turn: turn() });
+    expect(s.pollStopped).toBe(false);
+  });
+
   it("open/close key dialog", () => {
     const o = reducer(initialState, { type: "open_key_dialog" });
     expect(o.keyDialogOpen).toBe(true);

@@ -40,3 +40,11 @@ def test_settings_read_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     assert s.demo_today == date(2026, 3, 5)
     assert s.llm_provider == "deepseek"
     assert s.outbox_dir == tmp_path
+
+
+@pytest.mark.parametrize(
+    ("raw", "level"), [("", "INFO"), ("  ", "INFO"), ("warn", "WARNING"), ("debug", "DEBUG")]
+)
+def test_log_level_blank_and_aliases(monkeypatch: pytest.MonkeyPatch, raw: str, level: str) -> None:
+    monkeypatch.setenv("LOG_LEVEL", raw)
+    assert Settings().log_level == level

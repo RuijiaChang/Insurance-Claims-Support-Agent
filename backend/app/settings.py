@@ -42,7 +42,8 @@ class Settings(BaseSettings):
     @field_validator("log_level")
     @classmethod
     def _known_log_level(cls, v: str) -> str:
-        level = v.strip().upper()
+        level = v.strip().upper() or "INFO"  # `LOG_LEVEL=` (blank) means the default
+        level = {"WARN": "WARNING", "FATAL": "CRITICAL"}.get(level, level)
         if level not in _LOG_LEVELS:
             raise ValueError(f"LOG_LEVEL must be one of {', '.join(_LOG_LEVELS)}")
         return level

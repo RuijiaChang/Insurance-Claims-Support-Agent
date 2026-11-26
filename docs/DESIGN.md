@@ -150,7 +150,7 @@ Typed actions take priority over model classification. Trimmed text must be none
 
 ## 13. Frontend
 
-A React reducer manages chat, request state, and the Inspector. The top bar contains the scenario and consent selectors, reset, demo date, and model settings. Nine presets prefill openers. The frontend supplies phase-based suggestion chips. Server-supplied quick replies send typed actions. The Inspector has state, memory, timeline, and Outbox panels and uses a drawer on narrow screens. Model settings supports OpenAI, DeepSeek, and Custom, with an optional model override for every provider, and can test a connection. A reply that fell back to templates because of a model error carries one chat notice naming the cause. It opens when a key is needed, including after a demo quota error.
+A React reducer manages chat, request state, and the Inspector. The top bar contains the scenario and consent selectors, reset, demo date, and model settings. Nine presets prefill openers. The frontend supplies phase-based suggestion chips. Server-supplied quick replies send typed actions. The Inspector has state, memory, timeline, and Outbox panels and uses a drawer on narrow screens. Model settings supports OpenAI, DeepSeek, and Custom, with an optional model override for every provider, and can test a connection. A reply that fell back to templates because of a model error carries one chat notice naming the cause. The model settings dialog opens automatically when a key is needed, including after a demo quota error.
 
 ## 14. Configuration
 

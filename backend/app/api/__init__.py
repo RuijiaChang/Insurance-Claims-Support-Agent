@@ -47,8 +47,8 @@ class KeyRedactionFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if record.__dict__.get("_keys_redacted"):
             return True
-        if isinstance(record.msg, str):
-            record.msg = redact(record.msg)
+        # Non-string messages (e.g. ``logger.error(exc)``) are redacted via their text too.
+        record.msg = _redact_value(record.msg)
         if record.args:
             original = record.args
             record.args = _redact_value(original)

@@ -117,6 +117,8 @@ export function reducer(state: State, action: Action): State {
         error: kind === "auth" ? MSG_AUTH : undefined,
         llmNotice: notice,
         pollFailures: 0,
+        // The server answered, so the connection is back: let consent polling resume.
+        pollStopped: false,
       };
     }
     case "turn_failed": {

@@ -6,6 +6,7 @@ server-configured endpoint and model.
 """
 
 import ipaddress
+import re
 import socket
 import time
 from collections.abc import Callable
@@ -216,7 +217,11 @@ class LLMClient:
         body = e.body if isinstance(e.body, dict) else {}
         if body.get("param") == "model" or body.get("code") == "model_not_found":
             return True
-        return bool(self._cfg.model) and self._cfg.model in str(e.message)
+        model, message = self._cfg.model, str(e.message)
+        if not model or "model" not in message.lower():
+            return False
+        # Whole-token match, so a short custom model name ("m", "gpt") cannot hit inside a word.
+        return re.search(rf"(?<![\w.:/-]){re.escape(model)}(?![\w.:/-])", message) is not None
 
     def _call(self, fn: Callable[[], Any]) -> Any:
         attempt = 0
