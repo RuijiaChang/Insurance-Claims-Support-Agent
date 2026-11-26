@@ -21,7 +21,9 @@ export interface MemoryItem {
   key: string;
   value: string;
   captured_phase: string;
+  captured_turn: number;
   used_phase: string | null;
+  used_turn: number | null;
 }
 
 export interface TimelineEvent {

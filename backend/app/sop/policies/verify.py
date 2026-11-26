@@ -86,6 +86,10 @@ def _collecting(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepResu
             state.identity.matched_fields = sorted(outcome.matched_fields)
             state.pending_question = None
             step = _on_verified(state, ctx)
+            if state.access_granted:
+                # The claim lookup this same turn shows the hint was remembered; saying
+                # "I've noted your claim" first reads oddly before "you're verified".
+                pre = [d for d in pre if d.kind != "acknowledge_hint"]
             step.directives = pre + step.directives
             return step
         state.verification_failures += 1

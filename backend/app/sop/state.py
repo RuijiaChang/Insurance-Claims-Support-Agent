@@ -67,6 +67,7 @@ class HintRecord(BaseModel):
     captured_turn: int
     captured_phase: Phase
     used_phase: Phase | None = None
+    used_turn: int | None = None
 
 
 MEMORY_KEYS: frozenset[str] = frozenset(
@@ -92,10 +93,17 @@ class Memory(BaseModel):
             self.history.append((key, old))
         self.slots[key] = HintRecord(value=value, captured_turn=turn, captured_phase=phase)
 
-    def mark_used(self, key: str, phase: Phase) -> None:
+    def mark_used(self, key: str, phase: Phase, turn: int | None = None) -> None:
         rec = self.slots.get(key)
         if rec is not None:
             rec.used_phase = phase
+            rec.used_turn = turn
+
+    def drop(self, key: str) -> None:
+        """Retire a slot that no longer describes the conversation (kept in history)."""
+        old = self.slots.pop(key, None)
+        if old is not None:
+            self.history.append((key, old))
 
 
 Gate = Literal["verify", "consent", "email_address"]

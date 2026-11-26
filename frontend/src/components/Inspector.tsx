@@ -167,10 +167,13 @@ export default function Inspector({ sessionId, snapshot }: { sessionId: string |
             {tab === "State" && <StatePanel snapshot={snapshot} />}
             {tab === "Memory" && (snapshot.memory.length ? (
               <ul className="space-y-2">
-                {snapshot.memory.map(({ key, value, captured_phase, used_phase }) => (
+                {snapshot.memory.map(({ key, value, captured_phase, captured_turn, used_phase, used_turn }) => (
                   <li key={key} className={`${card} break-words`}>
                     <span className="font-semibold">{key}={value}</span>
-                    <p className="mt-1 text-slate-600">captured@{captured_phase} &rarr; {used_phase ? `used@${used_phase}` : "unused"}</p>
+                    <p className="mt-1 text-slate-600">
+                      captured turn {captured_turn} in {captured_phase} &rarr;{" "}
+                      {used_phase ? `used turn ${used_turn ?? "?"} in ${used_phase}${used_phase === "RESOLVE_INTENT" ? " (claim lookup)" : ""}` : "not used yet"}
+                    </p>
                   </li>
                 ))}
               </ul>

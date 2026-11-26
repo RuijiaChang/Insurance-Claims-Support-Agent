@@ -93,7 +93,14 @@ def _selected(
     for key in _HINT_SLOTS:
         value = getattr(hints, key)
         if from_memory or (value is not None and str(value) == state.memory.get(key)):
-            state.memory.mark_used(key, Phase.RESOLVE_INTENT)
+            state.memory.mark_used(key, Phase.RESOLVE_INTENT, turn)
+    if not from_memory:
+        # Picked with fresh hints: older hints described a different claim (e.g. the
+        # denied January claim before "what about my auto claim?"), so retire them.
+        for key in (*_HINT_SLOTS, "case_quote"):
+            rec = state.memory.slots.get(key)
+            if rec is not None and rec.captured_turn < turn:
+                state.memory.drop(key)
     if state.primary_intent is None:
         state.primary_intent = "denial_question" if case.status == "denied" else "status_inquiry"
     state.pending_question = None

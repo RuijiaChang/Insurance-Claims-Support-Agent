@@ -40,7 +40,9 @@ def public_snapshot(state: SessionState) -> dict[str, Any]:
                 "key": key,
                 "value": rec.value,
                 "captured_phase": rec.captured_phase.value,
+                "captured_turn": rec.captured_turn,
                 "used_phase": rec.used_phase.value if rec.used_phase is not None else None,
+                "used_turn": rec.used_turn,
             }
             for key, rec in state.memory.slots.items()
         ],

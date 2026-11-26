@@ -355,3 +355,34 @@ def test_changed_value_after_failure_compares_again(repo: FixtureRepo, sop: SopC
     step = _turn(other, repo, sop, ex(identity={"dob": "1985-03-15"}), turn=2)
     assert _kinds(step) == ["confirm_verified"]
     assert other.verification_failures == 1
+
+
+def test_no_hint_acknowledgement_when_verified_the_same_turn(
+    repo: FixtureRepo, sop: SopConfig
+) -> None:
+    # The claim is pulled up in this same turn, which already shows it was remembered.
+    state = SessionState.new("s1")
+    step = _turn(
+        state,
+        repo,
+        sop,
+        ex(identity=MARGARET, case_hints={"case_type": "healthcare", "free_text": "my claim"}),
+    )
+    assert state.access_granted
+    assert _kinds(step) == ["confirm_verified"]
+
+
+def test_representative_still_gets_hint_acknowledgement(repo: FixtureRepo, sop: SopConfig) -> None:
+    state = SessionState.new("s1")
+    step = _turn(
+        state,
+        repo,
+        sop,
+        ex(
+            identity=MARGARET,
+            case_hints={"case_type": "healthcare", "free_text": "her claim"},
+            **REP,
+        ),
+    )
+    assert not state.access_granted
+    assert "acknowledge_hint" in _kinds(step)

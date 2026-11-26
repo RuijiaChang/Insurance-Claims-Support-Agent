@@ -162,3 +162,33 @@ def test_never_reads_other_party_claims(repo: FixtureRepo, sop: SopConfig) -> No
     assert s.active_case_id is None
     assert step.directives[0].kind == "no_match"
     assert all("CL-3001" not in q.action for q in step.quick_replies)
+
+
+def test_used_turn_recorded(repo: FixtureRepo, sop: SopConfig) -> None:
+    s = _state()
+    _remember(s, case_type="healthcare", status="denied", month=1)
+    _turn(s, repo, sop, turn=2)
+    assert s.memory.slots["case_type"].used_turn == 2
+
+
+def test_switching_claims_retires_hints_about_the_old_one(
+    repo: FixtureRepo, sop: SopConfig
+) -> None:
+    s = _state()
+    _remember(s, case_type="healthcare", status="denied", month=1, free_text="denied in Jan")
+    _turn(s, repo, sop, turn=2)
+    assert s.active_case_id == "CL-2048"
+    _turn(s, repo, sop, ex(case_hints={"case_type": "auto", "free_text": "my auto claim"}), turn=3)
+    assert s.active_case_id == "CL-2102"
+    assert {k: r.value for k, r in s.memory.slots.items() if k != "intent"} == {
+        "case_type": "auto",
+        "case_quote": "my auto claim",
+    }
+    assert ("status", "denied") in [(k, r.value) for k, r in s.memory.history]
+
+
+def test_selecting_from_memory_keeps_hints(repo: FixtureRepo, sop: SopConfig) -> None:
+    s = _state()
+    _remember(s, case_type="healthcare", status="denied", month=1)
+    _turn(s, repo, sop, turn=2)
+    assert {"case_type", "status", "month"} <= set(s.memory.slots)
