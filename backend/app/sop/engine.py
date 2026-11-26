@@ -33,7 +33,7 @@ from app.sop import phases
 from app.sop.context import ResponderContext, build_context
 from app.sop.extraction import Extraction, reconcile
 from app.sop.memory import apply_extraction
-from app.sop.phases import Phase
+from app.sop.phases import Phase, SubState
 from app.sop.plan import Directive, FactScope, PolicyCtx, QuickReply, StepResult, TurnPlan
 from app.sop.policies.global_guards import apply_global_guards
 from app.sop.policies.post import handle_post
@@ -191,6 +191,9 @@ class Engine:
         action: str | None = None,
         event: Literal["consent_poll"] | None = None,
     ) -> TurnResult:
+        if event is not None and state.sub_state != SubState.CONSENT_PENDING:
+            # A late or stray poll (consent already decided) is not a turn: nothing to say.
+            return TurnResult([], [], public_snapshot(state), None)
         state.counters.turns += 1
         turn = state.counters.turns
         if turn > self.sop.ratelimit.max_turns_per_session or state.phase in _TERMINAL:
@@ -244,6 +247,10 @@ class Engine:
         hops = " -> ".join(p.value for p in plan.hops)
         kinds = ", ".join(d.kind for d in plan.directives) or "-"
         self._event(state, turn, "policy", f"hops: {hops}; directives: {kinds}", start)
+
+        # A background poll with nothing new to say adds no chat message.
+        if event is not None and not plan.directives:
+            return TurnResult([], list(plan.quick_replies), public_snapshot(state), llm_error)
 
         # 3. Context, responder and guard (retry once with feedback, then templates).
         rctx = build_context(state, plan, ctx, user_text)

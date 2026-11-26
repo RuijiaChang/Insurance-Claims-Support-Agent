@@ -85,8 +85,8 @@ def test_l2_on_bonus_example(sop: SopConfig) -> None:
 def test_l2_neutral_refusal_counts_toward_budget(sop: SopConfig) -> None:
     s = _state()
     directives, _ = _run(s, sop, ex(refused_fields=["phone"]))
-    assert _kinds(directives) == ["empathize", "persuade"]
-    assert _data(directives, "empathize") == {"label": "frustrated"}
+    # A calm refusal gets the explanation, not invented empathy ("I know it's frustrating").
+    assert _kinds(directives) == ["persuade"]
     assert s.counters.persuasion_attempts["verify"] == 1
 
 

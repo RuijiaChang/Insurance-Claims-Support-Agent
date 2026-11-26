@@ -195,19 +195,31 @@ _MONTHS = (
 )
 
 
-def _case_hints_grounded(h: CaseHints, text: str) -> bool:
-    """Does the caller's own message mention anything these case hints claim?"""
+def _ground_case_hints(h: CaseHints, text: str) -> CaseHints:
+    """Keep only the hint fields the caller's own message supports, field by field.
+
+    A model often carries context forward ("case_type": "auto" from the claim being
+    discussed) when the caller now says "my denied one"; that stale field would keep
+    the conversation on the wrong claim.
+    """
     low = text.casefold()
-    if h.free_text and h.free_text.strip().casefold() in low:
-        return True
-    if h.case_id and _has_token(text, h.case_id):
-        return True
-    for value in (h.case_type, h.status):
-        if value and (value in low or any(w in low for w in _HINT_WORDS.get(value, ()))):
-            return True
-    if h.month and (_MONTHS[h.month - 1] in low or _has_token(text, str(h.month))):
-        return True
-    return bool(h.year and _has_token(text, str(h.year)))
+
+    def said(value: str | None) -> bool:
+        if not value:
+            return False
+        return value.casefold() in low or any(w in low for w in _HINT_WORDS.get(value, ()))
+
+    month_said = h.month is not None and (
+        _MONTHS[h.month - 1] in low or _has_token(text, str(h.month))
+    )
+    return CaseHints(
+        case_id=h.case_id if h.case_id and _has_token(text, h.case_id) else None,
+        case_type=h.case_type if said(h.case_type) else None,
+        status=h.status if said(h.status) else None,
+        month=h.month if month_said else None,
+        year=h.year if h.year and _has_token(text, str(h.year)) else None,
+        free_text=h.free_text if h.free_text and h.free_text.strip().casefold() in low else None,
+    )
 
 
 def reconcile(llm: Extraction | None, hits: RegexHits, user_text: str) -> Extraction:
@@ -225,11 +237,7 @@ def reconcile(llm: Extraction | None, hits: RegexHits, user_text: str) -> Extrac
     # Case hints get the same rule, except when the caller picks from options the agent
     # listed ("the second one"): then the hints legitimately come from the agent's message.
     if "select_case" not in out.acts:
-        hints = out.case_hints
-        if hints.free_text and hints.free_text.strip().casefold() not in user_text.casefold():
-            hints.free_text = None
-        if not _case_hints_grounded(hints, user_text):
-            out.case_hints = CaseHints()
+        out.case_hints = _ground_case_hints(out.case_hints, user_text)
     if hits.dob_raw:
         out.identity.dob = hits.dob_raw
     if hits.phone:

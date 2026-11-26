@@ -173,11 +173,11 @@ def test_rep_missing_details_asks_then_checks(repo: FixtureRepo, sop: SopConfig)
 def test_consent_default_approves_on_second_poll(repo: FixtureRepo, sop: SopConfig) -> None:
     state = _rep_to_consent_pending(repo, sop)
     first = _poll(state, repo, sop, turn=2)
-    assert _kinds(first) == ["consent_waiting"]
+    assert _kinds(first) == []  # still pending: a background poll stays silent
     assert state.access_granted is False
     second = _poll(state, repo, sop, turn=3)
     assert _kinds(second) == ["consent_approved"]
-    assert second.continue_hop is False
+    assert second.continue_hop is True  # on to the claim the caller asked about
     assert state.phase == Phase.RESOLVE_INTENT
     assert state.access_granted is True
 
@@ -192,7 +192,7 @@ def test_user_message_also_polls_consent(repo: FixtureRepo, sop: SopConfig) -> N
 def test_consent_timeout_expired_options(repo: FixtureRepo, sop: SopConfig) -> None:
     state = _rep_to_consent_pending(repo, sop, scenario="timeout")
     for turn in range(2, 6):
-        assert _kinds(_poll(state, repo, sop, turn)) == ["consent_waiting"]
+        assert _kinds(_poll(state, repo, sop, turn)) == []
     step = _poll(state, repo, sop, 6)
     assert _kinds(step) == ["consent_expired"]
     assert _directive(step, "consent_expired")["can_resend"] is True
@@ -386,3 +386,25 @@ def test_representative_still_gets_hint_acknowledgement(repo: FixtureRepo, sop: 
     )
     assert not state.access_granted
     assert "acknowledge_hint" in _kinds(step)
+
+
+def test_verified_caller_with_unstated_role_is_the_policyholder(
+    repo: FixtureRepo, sop: SopConfig
+) -> None:
+    state = SessionState.new("s1")
+    _turn(state, repo, sop, ex(identity=MARGARET))
+    assert state.access_granted and state.caller.role == "policyholder"
+
+
+def test_unknown_person_with_three_fields_is_a_failed_attempt(
+    repo: FixtureRepo, sop: SopConfig
+) -> None:
+    state = SessionState.new("s1")
+    step = _turn(
+        state,
+        repo,
+        sop,
+        ex(identity={"full_name": "John Smith", "dob": "1970-01-01", "phone": "555-111-2222"}),
+    )
+    assert state.verification_failures == 1
+    assert "verify_failed" in _kinds(step)

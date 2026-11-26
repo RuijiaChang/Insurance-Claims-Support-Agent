@@ -218,3 +218,13 @@ def test_email_offer_before_handoff_must_acknowledge_it(repo: FixtureRepo) -> No
         rctx,
         repo,
     ).ok
+
+
+def test_consent_approval_must_be_said(repo: FixtureRepo) -> None:
+    # Live: the reply jumped straight to the claim answer and never said consent came through.
+    s = _state(True, Phase.PROCESS_CASE)
+    rctx = _with(_rctx(), "consent_approved")
+    assert check_reply("Your claim was denied for X.", s, rctx, repo).violations == [
+        "missing_consent_approved"
+    ]
+    assert check_reply("She has approved the request. Your claim...", s, rctx, repo).ok

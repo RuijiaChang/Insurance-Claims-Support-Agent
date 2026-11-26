@@ -64,7 +64,7 @@ def test_offer_masks_email(repo: FixtureRepo, sop: SopConfig) -> None:
     assert step.directives[0].data["to_masked"] == HOLDER_EMAIL
     assert step.directives[0].data["preference"] is None
     assert [(q.label, q.action) for q in step.quick_replies] == [
-        ("Send summary", "email_send"),
+        ("Yes, show me the summary", "email_send"),
         ("No thanks", "email_skip"),
     ]
     assert s.pending_question == PendingQuestion(kind="offer_email")
@@ -89,8 +89,8 @@ def test_preview_then_send_closes(repo: FixtureRepo, sop: SopConfig) -> None:
     assert s.email.preview is not None
     assert s.pending_question == PendingQuestion(kind="confirm_send")
     assert [(q.label, q.action) for q in step.quick_replies] == [
-        ("Send", "email_confirm"),
-        ("Skip", "email_skip"),
+        ("Send email", "email_confirm"),
+        ("Don't send", "email_skip"),
     ]
     assert outbox.list("s1") == []
     step = _turn(s, repo, sop, action="email_confirm", outbox=outbox)
@@ -168,13 +168,22 @@ def test_draft_covers_two_cases(repo: FixtureRepo, sop: SopConfig) -> None:
     assert draft.to_masked == HOLDER_EMAIL
     discussed = draft.sections["What we discussed"]
     assert len(discussed) == 2
-    assert discussed[0].startswith("CL-2048: ")
-    assert discussed[1].startswith("CL-2102: ")
-    assert "CL-2102: Status: approved" in draft.sections["Claim status / outcome"]
+    assert discussed[0].startswith("CL-2048 — healthcare claim from ")
+    assert discussed[1].startswith("CL-2102 — auto claim from ")
+    outcome = draft.sections["Claim status / outcome"]
+    # Grouped by claim: one header each, items indented below, amounts from the record.
+    i = outcome.index(discussed[1])
+    assert outcome[i + 1] == "  Status: approved"
+    assert "  Expected reimbursement: $3,200.00" in outcome[i:]
+    assert "  Allowed maximum: $3,500.00" in outcome[i:]
     assert draft.sections["Next steps"] == [
-        "CL-2048: Submit the pathology report",
-        "CL-2048: Appeal deadline: 2026-03-18",
+        discussed[0],
+        "  Submit the pathology report",
+        "  Appeal deadline: 2026-03-18",
     ]
+    body = draft.body
+    assert "    - Submit the pathology report" in body
+    assert "CL-2048: " not in body
 
 
 def test_draft_defaults_when_nothing_discussed(repo: FixtureRepo) -> None:

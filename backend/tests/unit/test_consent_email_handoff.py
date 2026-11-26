@@ -54,14 +54,23 @@ def test_draft_body() -> None:
     assert _draft().body == "Discussed\n- a\n- b\n\nNext steps\n- c"
 
 
+def test_draft_body_nests_indented_lines() -> None:
+    d = EmailDraft(subject="s", to_masked="m", sections={"Next steps": ["CL-1 (x)", "  do y"]})
+    assert d.body == "Next steps\n- CL-1 (x)\n    - do y"
+
+
 def test_outbox_send_and_list(tmp_path: Path) -> None:
     box = Outbox(tmp_path)
     mid = box.send("s1", "margaret@email.com", _draft())
     items = box.list("s1")
+    sent_at = items[0]["sent_at"]
+    assert sent_at.endswith("+00:00")
     assert items == [
         {
             "message_id": mid,
             "to": "margaret@email.com",
+            "to_masked": "m*****@email.com",
+            "sent_at": sent_at,
             "subject": "Your claim summary",
             "body": _draft().body,
         }

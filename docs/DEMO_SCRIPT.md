@@ -1,13 +1,13 @@
 # Demo script
 
-Choose each preset in the scenario picker. It starts a fresh session and fills in the opener. Press **Send** to submit it. Suggestion chips fill the composer for review. Quick replies submit actions directly. Wording varies by model. The expected results describe the phase, access gate, and fixture facts to look for.
+Choose each preset in the scenario picker. It starts a fresh session and fills in the opener. Press **Send** to submit it. Suggestion chips send that line as your next message. Quick replies submit actions directly. Wording varies by model. The expected results describe the phase, access gate, and fixture facts to look for.
 
 ## 1. Margaret · denied claim
 
 1. Send “I'm the policyholder. My name is Margaret Chen, policy POL-9921. I'm calling about my denied healthcare claim from January. DOB is 1985-03-15, SSN last four is 4472.” Expect verification and selection of CL-2048 within the same turn. The Inspector shows the January denial hint captured in `VERIFY_ID` and used in `RESOLVE_INTENT`.
 2. Ask “What exactly do I need to send?” Expect the original pathology report and treating provider office note, with the submission instructions grounded in the fixtures.
 3. Ask “How soon do I need to submit?” Expect the fixture’s submission-timing guidance to send the documents within a week. Ask “How long after I submit?” to see the distinct processing guidance. The email preview includes the March 18, 2026 appeal deadline.
-4. Say “That's all, thanks.” Expect an email offer. Choose **Send summary** to preview the discussion, claim outcome, and next steps. Confirm **Send** and open the Outbox to see the mock message. To exercise the skip branch, restart and choose **No thanks** at the offer.
+4. Say “That's all, thanks.” Expect an email offer. Choose **Yes, show me the summary** to preview the discussion, claim outcome, and next steps. Confirm **Send email** and open the Outbox to see the mock message. To exercise the skip branch, restart and choose **No thanks** at the offer.
 
 ## 2. Margaret · frustrated caller
 

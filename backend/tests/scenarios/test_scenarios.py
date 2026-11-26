@@ -482,14 +482,16 @@ def test_s7_rep_gets_access_only_after_consent(repo: FixtureRepo, sop: SopConfig
     assert "consent_sent" in c.kinds
     assert "***-***-**36" in _reply(sent) and "521-2836" not in _reply(sent)
 
-    c.poll()
+    quiet = c.poll()
     assert c.state.sub_state == SubState.CONSENT_PENDING and not c.state.access_granted
-    assert "consent_waiting" in c.kinds
+    assert quiet.messages == []  # a still-pending background poll says nothing
 
     c.poll()
     assert c.state.access_granted
-    assert c.state.phase == Phase.RESOLVE_INTENT
-    assert "consent_approved" in c.kinds
+    assert c.kinds[0] == "consent_approved"
+    # Approval goes straight on to the claims instead of stopping at "I can help now".
+    assert c.state.phase in (Phase.RESOLVE_INTENT, Phase.PROCESS_CASE)
+    assert len(c.kinds) > 1
 
 
 def test_s7b_question_while_consent_pending_leaks_nothing(
@@ -855,3 +857,33 @@ def test_end_session_in_post_process_skips_email(
     else:
         assert c.state.phase == Phase.CLOSED
         assert "closing" in c.kinds
+
+
+def test_s7c_question_asked_while_waiting_is_answered_on_approval(
+    repo: FixtureRepo, sop: SopConfig
+) -> None:
+    c = Convo(repo, sop)
+    c.say(DAVID_TEXT, **DAVID_EX)
+    c.say(
+        "While we wait — why was her healthcare claim denied?",
+        acts=["ask_question"],
+        intent="denial_question",
+        case_hints={"case_type": "healthcare", "status": "denied"},
+        question="Why was the claim denied?",
+    )
+    c.poll()  # approved on the second poll (the message above was the first)
+    assert c.state.access_granted
+    assert c.state.active_case_id == "CL-2048"
+    assert c.state.phase == Phase.PROCESS_CASE
+    assert c.kinds[0] == "consent_approved" and "case_selected" in c.kinds
+
+
+def test_stray_poll_after_consent_is_ignored(repo: FixtureRepo, sop: SopConfig) -> None:
+    c = Convo(repo, sop)
+    c.say(DAVID_TEXT, **DAVID_EX)
+    c.poll()
+    c.poll()
+    assert c.state.access_granted
+    turns, phase = c.state.counters.turns, c.state.phase
+    late = c.poll()  # e.g. a poll already in flight when approval landed
+    assert late.messages == [] and c.state.counters.turns == turns and c.state.phase == phase

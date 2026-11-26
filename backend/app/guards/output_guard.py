@@ -255,6 +255,11 @@ def _pii_violations(reply: str, repo: FixtureRepo) -> list[str]:
 _HUMAN_RE = re.compile(r"\b(representative|human|person|specialist|agent|someone)\b", re.IGNORECASE)
 
 
+_APPROVED_RE = re.compile(
+    r"\b(approved|consent(ed)?|authori[sz]ed|gave permission)\b", re.IGNORECASE
+)
+
+
 def _needs_handoff_mention(rctx: ResponderContext) -> bool:
     return any(
         (d.kind == "decline_off_topic" and d.data.get("offer_handoff"))
@@ -265,9 +270,14 @@ def _needs_handoff_mention(rctx: ResponderContext) -> bool:
 
 def _required_violations(reply: str, rctx: ResponderContext) -> list[str]:
     """Content a directive requires: the caller must hear that a human is on offer."""
+    found = []
     if _needs_handoff_mention(rctx) and not _HUMAN_RE.search(reply):
-        return ["missing_handoff_offer"]
-    return []
+        found.append("missing_handoff_offer")
+    if any(d.kind == "consent_approved" for d in rctx.directives) and not _APPROVED_RE.search(
+        reply
+    ):
+        found.append("missing_consent_approved")
+    return found
 
 
 def check_reply(

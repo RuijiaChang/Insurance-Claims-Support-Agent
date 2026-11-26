@@ -250,7 +250,9 @@ def test_outbox_endpoint_after_send(tmp_path: Path) -> None:
     assert _press(client, sid, "email_confirm").json()["state"]["phase"] == "CLOSED"
     items = client.get(f"/api/sessions/{sid}/outbox").json()
     assert len(items) == 1
-    assert items[0]["to"] == "margaret@email.com" and "CL-2048" in items[0]["body"]
+    assert "to" not in items[0]  # the API shows the recipient masked only
+    assert items[0]["to_masked"] == "m*****@email.com" and items[0]["sent_at"]
+    assert "CL-2048" in items[0]["body"] and "margaret@email.com" not in str(items)
     assert len(list(tmp_path.glob(f"{sid}-MSG-*.eml"))) == 1
 
 
@@ -337,7 +339,10 @@ def test_s17_concurrent_message_and_poll_serialized() -> None:
     assert state["consent"]["polls"] == 3
     assert state["counters"]["turns"] == 4
     transcript = client.get(f"/api/sessions/{sid}/transcript").json()["transcript"]
-    assert [m["turn"] for m in transcript if m["role"] == "agent"] == [0, 1, 2, 3, 4]
+    # Serialized turns 2-4 in some order; the still-pending poll among them says nothing.
+    agent_turns = [m["turn"] for m in transcript if m["role"] == "agent"]
+    assert agent_turns[:2] == [0, 1] and len(agent_turns) == 4
+    assert agent_turns == sorted(set(agent_turns))
 
 
 # --- keys, providers, rate limits ---------------------------------------------------

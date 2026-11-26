@@ -43,6 +43,8 @@ export interface HandoffTicket {
 
 export interface OutboxMessage {
   message_id: string;
+  to_masked: string;
+  sent_at: string;
   subject: string;
   body: string;
 }

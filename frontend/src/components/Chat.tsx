@@ -15,6 +15,9 @@ interface Props {
   onDraft: (text: string) => void;
   onSend: (text: string) => void;
   onQuickReply: (reply: QuickReply) => void;
+  /** The session reached CLOSED or HANDOFF: replace the composer with a restart button. */
+  ended?: boolean;
+  onNewChat?: () => void;
 }
 
 function Bubble({ m }: { m: ChatMessage }) {
@@ -38,7 +41,7 @@ function Bubble({ m }: { m: ChatMessage }) {
   );
 }
 
-export default function Chat({ messages, quickReplies, pending, ready, draft, suggestions, onDraft, onSend, onQuickReply }: Props) {
+export default function Chat({ messages, quickReplies, pending, ready, draft, suggestions, onDraft, onSend, onQuickReply, ended = false, onNewChat }: Props) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const tooLong = draft.length > MAX_TEXT_LEN;
@@ -87,6 +90,18 @@ export default function Chat({ messages, quickReplies, pending, ready, draft, su
         )}
         <div ref={endRef} />
       </div>
+      {ended && !pending ? (
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white p-3">
+          <p className="text-sm text-slate-600">This conversation has ended.</p>
+          <button
+            type="button"
+            onClick={onNewChat}
+            className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          >
+            Start a new chat
+          </button>
+        </div>
+      ) : (
       <form
         className="border-t border-slate-200 bg-white p-3"
         onSubmit={(e) => {
@@ -130,6 +145,7 @@ export default function Chat({ messages, quickReplies, pending, ready, draft, su
           </p>
         )}
       </form>
+      )}
     </section>
   );
 }

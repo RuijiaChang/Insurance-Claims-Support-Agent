@@ -89,14 +89,9 @@ def emotion_directives(
 
     if gate is not None and (intensity >= 2 or refused):
         counters.persuasion_attempts[gate] = attempts + 1
-        shown = label if label != "neutral" else "frustrated"
-        return (
-            [
-                Directive(kind="empathize", data={"label": shown}),
-                Directive(kind="persuade", data={"gate": gate}),
-            ],
-            [],
-        )
+        # A calm refusal or bypass attempt gets the explanation, not invented empathy.
+        empathy = [Directive(kind="empathize", data={"label": label})] if negative else []
+        return [*empathy, Directive(kind="persuade", data={"gate": gate})], []
 
     if negative:
         return [Directive(kind="empathize", data={"label": label})], []

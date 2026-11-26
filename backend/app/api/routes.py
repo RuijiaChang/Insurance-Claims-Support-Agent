@@ -255,7 +255,8 @@ async def get_transcript(session_id: str, request: Request) -> dict[str, Any]:
 def get_outbox(session_id: str, request: Request) -> list[dict[str, str]]:
     _session(request, session_id)
     engine: Engine = request.app.state.engine
-    return engine.outbox.list(session_id)
+    # The demo outbox shows the recipient masked, like the chat does.
+    return [{k: v for k, v in m.items() if k != "to"} for m in engine.outbox.list(session_id)]
 
 
 @router.delete("/sessions/{session_id}", status_code=204)

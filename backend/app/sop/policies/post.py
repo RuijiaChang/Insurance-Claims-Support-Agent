@@ -15,8 +15,8 @@ from app.sop.state import PendingQuestion, SessionState
 from app.tools.email import mask_email
 
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
-_OFFER_REPLIES = [("Send summary", "email_send"), ("No thanks", "email_skip")]
-_PREVIEW_REPLIES = [("Send", "email_confirm"), ("Skip", "email_skip")]
+_OFFER_REPLIES = [("Yes, show me the summary", "email_send"), ("No thanks", "email_skip")]
+_PREVIEW_REPLIES = [("Send email", "email_confirm"), ("Don't send", "email_skip")]
 
 
 def _replies(pairs: list[tuple[str, str]]) -> list[QuickReply]:

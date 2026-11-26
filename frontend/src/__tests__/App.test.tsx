@@ -101,11 +101,28 @@ it("starts the timeout preset and prefills its opener without sending it", async
 it("loads the current session's sent mail when Outbox opens", async () => {
   await start();
   fetchMock.mockResolvedValueOnce(response([
-    { message_id: "m1", subject: "Claims summary", body: "Send an itemized bill." },
+    { message_id: "m1", to_masked: "m*****@email.com", sent_at: "2026-03-05T10:00:00+00:00", subject: "Claims summary", body: "Send an itemized bill." },
   ]));
   await act(async () => { fireEvent.click(screen.getByRole("tab", { name: "Outbox" })); });
   expect(screen.getByText("Claims summary")).toBeTruthy();
   expect(screen.getByText("Send an itemized bill.")).toBeTruthy();
+  expect(screen.getByText(/To m\*{5}@email\.com ·/)).toBeTruthy();
+});
+
+it("replaces the composer with a restart button once the conversation ends", async () => {
+  await start();
+  fetchMock.mockResolvedValueOnce(response({
+    messages: [{ role: "agent", text: "Goodbye" }], quick_replies: [],
+    state: { ...snapshot, phase: "CLOSED", sub_state: "NONE", consent: { ...snapshot.consent, status: "approved" } },
+  }));
+  const textarea = screen.getByRole("textbox", { name: "Message" });
+  fireEvent.change(textarea, { target: { value: "bye" } });
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Send message" })); });
+  expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
+  expect(screen.getByText("This conversation has ended.")).toBeTruthy();
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Start a new chat" })); });
+  expect(requests("POST", "/api/sessions")).toHaveLength(2);
+  expect(screen.getByRole("textbox", { name: "Message" })).toBeTruthy();
 });
 
 it("restarts the poll interval after a transient failure", async () => {

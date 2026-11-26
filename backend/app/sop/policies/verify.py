@@ -151,6 +151,7 @@ def _lock(state: SessionState, ctx: PolicyCtx) -> StepResult:
 
 def _on_verified(state: SessionState, ctx: PolicyCtx) -> StepResult:
     if state.caller.role != "representative":
+        state.caller.role = "policyholder"
         state.access_granted = True
         return StepResult(
             directives=[Directive(kind="confirm_verified")],
@@ -229,10 +230,13 @@ def _consent_pending(state: SessionState, ctx: PolicyCtx) -> StepResult:
             directives=[Directive(kind="consent_approved")],
             quick_replies=[],
             transition=(Phase.RESOLVE_INTENT, SubState.NONE),
-            continue_hop=False,
+            # Go on to the claim: what the representative asked while waiting is in memory.
+            continue_hop=True,
         )
     if state.consent.status == "expired":
         return _consent_expired(state, ctx, (Phase.VERIFY_ID, SubState.CONSENT_EXPIRED))
+    if ctx.event == "consent_poll":
+        return StepResult(directives=[], quick_replies=[])  # nothing new: say nothing
     return StepResult(directives=[Directive(kind="consent_waiting")], quick_replies=[])
 
 

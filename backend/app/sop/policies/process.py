@@ -91,7 +91,11 @@ def _wants_switch(state: SessionState, ex: Extraction, ctx: PolicyCtx, case: Cla
     hints = ex.case_hints.to_input()
     if hints.case_id is not None and not _same(hints.case_id, case.case_id):
         return True
-    return hints.case_type is not None and not _same(hints.case_type, case.case_type)
+    if hints.case_type is not None:
+        return not _same(hints.case_type, case.case_type)
+    # "my denied one" while the open auto claim is active: a status that contradicts the
+    # active claim points at another one (RESOLVE asks if several match).
+    return hints.case_id is None and hints.status is not None and hints.status != case.status
 
 
 def _wants_done(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> bool:

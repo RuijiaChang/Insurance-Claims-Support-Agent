@@ -232,6 +232,8 @@ export default function App() {
             onDraft={setDraft}
             onSend={(text) => void runTurn((id) => sendMessage(id, { text }), text)}
             onQuickReply={(reply) => void runTurn((id) => sendMessage(id, { action: reply.action }), reply.label)}
+            ended={state.snapshot?.phase === "CLOSED" || state.snapshot?.phase === "HANDOFF"}
+            onNewChat={() => void replaceSession(consent, scenario)}
           />
         </div>
         {showInspector && (

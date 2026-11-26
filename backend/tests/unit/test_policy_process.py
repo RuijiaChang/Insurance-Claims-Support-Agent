@@ -217,3 +217,19 @@ def test_same_case_hint_does_not_switch(repo: FixtureRepo, sop: SopConfig) -> No
     )
     assert s.phase == Phase.PROCESS_CASE
     assert _kinds(step)[0] == "answer_question"
+
+
+def test_switch_on_contradicting_status(repo: FixtureRepo, sop: SopConfig) -> None:
+    # On the open auto claim, "my denied one" means the denied claim, not this one.
+    s = _state("CL-2102")
+    _turn(s, repo, sop, ex(case_hints={"status": "denied"}, question="appeal deadline?"))
+    assert s.phase == Phase.RESOLVE_INTENT
+
+
+def test_matching_status_or_typed_hint_does_not_switch(repo: FixtureRepo, sop: SopConfig) -> None:
+    s = _state("CL-2048")  # denied
+    _turn(s, repo, sop, ex(case_hints={"status": "denied"}, question="why?"))
+    assert s.phase == Phase.PROCESS_CASE
+    s = _state("CL-2102")  # open auto: "is my auto claim denied?" stays on it
+    _turn(s, repo, sop, ex(case_hints={"case_type": "auto", "status": "denied"}, question="?"))
+    assert s.phase == Phase.PROCESS_CASE

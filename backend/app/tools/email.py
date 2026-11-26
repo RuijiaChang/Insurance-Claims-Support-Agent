@@ -1,6 +1,7 @@
 """Mock outbox (acts as the mail server) and PII masking helpers."""
 
 import secrets
+from datetime import UTC, datetime
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -28,6 +29,8 @@ class Outbox:
         item = {
             "message_id": message_id,
             "to": to,
+            "to_masked": mask_email(to),
+            "sent_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "subject": draft.subject,
             "body": draft.body,
         }

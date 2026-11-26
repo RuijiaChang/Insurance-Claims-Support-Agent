@@ -53,6 +53,8 @@ def directives_reminder(directives: list[Directive]) -> str:
         for d in directives
     ):
         text += " REQUIRED: say in words that you can connect them with a representative."
+    if any(d.kind == "consent_approved" for d in directives):
+        text += " REQUIRED: first tell them the policyholder has approved the consent request."
     return text
 
 

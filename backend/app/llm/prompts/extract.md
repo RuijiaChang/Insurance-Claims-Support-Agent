@@ -33,7 +33,7 @@ Identity fields the caller explicitly refuses or says they don't want to give in
 
 ## caller_role
 - `policyholder`: they say or clearly imply the policy is theirs ("I'm the policyholder", "my claim").
-- `representative`: they call on behalf of someone else ("calling for my mother", "my husband's claim").
+- `representative`: they call on behalf of someone else ("calling for my mother", "my husband's claim"). Mentioning a relative is not enough: "my mother is in the hospital and my claim was denied" is the policyholder (it's *their* claim).
 - `unknown`: not stated in this message.
 
 ## representative
@@ -113,3 +113,10 @@ Input user_message: "I'm the policyholder. My name is Jane Doe, policy POL-0000.
 
 Output:
 {"identity": {"full_name": "Jane Doe", "dob": "July 4, 1970", "phone": null, "email": "jane@example.com", "id_last4": "1234", "policy_number": "POL-0000"}, "refused_fields": [], "caller_role": "policyholder", "representative": null, "case_hints": {"case_id": null, "case_type": "healthcare", "status": "denied", "month": 1, "year": null, "free_text": "my denied healthcare claim from January"}, "intent": "denial_question", "guidance_topic": null, "question": null, "acts": ["provide_info"], "scope": "in_scope_claim", "emotion": {"label": "neutral", "intensity": 0}, "email_preference": null}
+
+Input user_message: "I'm so stressed, my mother is in the hospital and my claim was denied! I'm Sam Lee."
+
+Output:
+{"identity": {"full_name": "Sam Lee", "dob": null, "phone": null, "email": null, "id_last4": null, "policy_number": null}, "refused_fields": [], "caller_role": "policyholder", "representative": null, "case_hints": {"case_id": null, "case_type": null, "status": "denied", "month": null, "year": null, "free_text": "my claim was denied"}, "intent": "denial_question", "guidance_topic": null, "question": null, "acts": ["provide_info"], "scope": "in_scope_claim", "emotion": {"label": "anxious", "intensity": 2}, "email_preference": null}
+
+(It is *their* claim; the mother is only context. Compare "I'm calling about my mother's claim", which is a representative.)

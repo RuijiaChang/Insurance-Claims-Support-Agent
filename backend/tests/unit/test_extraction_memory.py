@@ -221,3 +221,12 @@ def test_reconcile_keeps_case_hints_when_caller_selects_a_listed_option() -> Non
     llm = _copied_from_agent().model_copy(update={"acts": ["select_case"]})
     out = reconcile(llm, RegexHits(), "the second one")
     assert out.case_hints.case_type == "auto"
+
+
+def test_reconcile_drops_hint_fields_carried_over_from_context() -> None:
+    # Live: on the auto claim, "my denied one" came back as case_type=auto + status=denied.
+    llm = Extraction(
+        case_hints=CaseHints(case_type="auto", status="denied", free_text="my denied one")
+    )
+    out = reconcile(llm, RegexHits(), "Is there an appeal deadline on my denied one?")
+    assert out.case_hints == CaseHints(status="denied", free_text="my denied one")

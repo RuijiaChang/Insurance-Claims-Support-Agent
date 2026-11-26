@@ -167,3 +167,10 @@ def test_wrong_policy_number_falls_through(repo: FixtureRepo) -> None:
     out = verify(good(), set(), "POL-0000", repo.policyholders, T, 3)
     assert out.status == "pass"
     assert out.party_id == "P9"
+
+
+def test_normalize_phone_accepts_well_formed_unassigned_numbers() -> None:
+    # 555 numbers aren't "valid" to libphonenumber, but a caller giving one has still
+    # given a phone number: it counts as provided and simply fails to match.
+    assert normalize_phone("555-111-2222") == "+15551112222"
+    assert normalize_phone("12345") is None

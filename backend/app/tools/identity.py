@@ -81,7 +81,9 @@ def normalize_phone(s: str) -> str | None:
         num = phonenumbers.parse(s, "US")
     except phonenumbers.NumberParseException:
         return None
-    if not phonenumbers.is_valid_number(num):
+    # A well-formed number that isn't an assigned one (e.g. 555-111-2222) still counts as
+    # a provided detail; it simply won't match anyone, so it fails verification visibly.
+    if not phonenumbers.is_possible_number(num):
         return None
     return phonenumbers.format_number(num, phonenumbers.PhoneNumberFormat.E164)
 

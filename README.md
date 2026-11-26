@@ -45,7 +45,7 @@ For a one-turn live check of the configured key, run `set -a; . ../.env; set +a;
 
 ## Try the nine presets
 
-Select a scenario to prefill its opener, then press **Send**. Suggestion chips fill the composer. Quick replies execute the indicated action.
+Select a scenario to prefill its opener, then press **Send**. Suggestion chips above the composer send that line as your next message. Quick replies execute the indicated action.
 
 1. **Margaret · denied claim** carries an early case hint through verification, selects CL-2048, and offers a follow-up email.
 2. **Margaret · frustrated caller** responds to frustration, explains verification, and offers alternative fields.

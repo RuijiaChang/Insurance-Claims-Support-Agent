@@ -105,7 +105,10 @@ function Outbox({ sessionId, decision }: { sessionId: string; decision: string |
     <ul className="space-y-3">
       {items.map((item) => (
         <li key={item.message_id} className={card}>
-          <h3 className="mb-2 font-semibold">{item.subject}</h3>
+          <h3 className="font-semibold">{item.subject}</h3>
+          <p className="mb-2 text-xs text-slate-500">
+            To {item.to_masked} · {new Date(item.sent_at).toLocaleString()}
+          </p>
           <p className="whitespace-pre-wrap break-words text-slate-700">{item.body}</p>
         </li>
       ))}
