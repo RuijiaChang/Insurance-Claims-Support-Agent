@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, QuickReply } from "../types";
 import QuickReplies from "./QuickReplies";
 import SuggestionChips from "./SuggestionChips";
@@ -43,6 +43,16 @@ function Bubble({ m }: { m: ChatMessage }) {
 
 export default function Chat({ messages, quickReplies, pending, ready, draft, suggestions, onDraft, onSend, onQuickReply, ended = false, onNewChat }: Props) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const starting = messages.length === 0 && !pending;
+  const [slowStart, setSlowStart] = useState(false);
+  useEffect(() => {
+    if (!starting) return;
+    const timer = setTimeout(() => setSlowStart(true), 4000);
+    return () => {
+      clearTimeout(timer);
+      setSlowStart(false);
+    };
+  }, [starting]);
   const endRef = useRef<HTMLDivElement>(null);
   const tooLong = draft.length > MAX_TEXT_LEN;
   const canSend = ready && !pending && draft.trim().length > 0 && !tooLong;
@@ -62,8 +72,13 @@ export default function Chat({ messages, quickReplies, pending, ready, draft, su
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Chat">
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4" role="log" aria-live="polite">
-        {messages.length === 0 && !pending && (
-          <p className="m-auto text-sm text-slate-500">Starting a conversation&hellip;</p>
+        {starting && (
+          <div className="m-auto text-center text-sm text-slate-500">
+            <p>Starting a conversation&hellip;</p>
+            {slowStart && (
+              <p className="mt-1 text-xs">The demo server may be waking up; this can take up to a minute.</p>
+            )}
+          </div>
         )}
         {messages.map((m, i) => (
           <Bubble key={i} m={m} />

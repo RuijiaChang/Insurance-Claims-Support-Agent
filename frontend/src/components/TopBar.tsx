@@ -34,6 +34,10 @@ export default function TopBar({ config, userSettings, onOpenKeyDialog, onReset,
         </button>
       </span>
     );
+  } else if (!config) {
+    // Before /api/config answers (e.g. a sleeping free instance waking up), don't claim
+    // there is no key: there may well be a demo key.
+    keyStatus = <span className="text-slate-500">Connecting&hellip;</span>;
   } else {
     keyStatus = (
       <button type="button" onClick={onOpenKeyDialog} className={`${linkCls} text-amber-700`}>

@@ -216,3 +216,18 @@ it("shows a notice bubble when a reply fell back to templates", async () => {
   expect(screen.getByText(/selected model isn't available for this key/)).toBeTruthy();
   expect(screen.queryByRole("dialog")).toBeNull();
 });
+
+it("shows Connecting, not 'No key', while the server config is loading, then explains a slow start", async () => {
+  let release!: (r: Response) => void;
+  fetchMock.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+  await act(async () => { render(<App />); });
+  expect(screen.getByText("Connecting…")).toBeTruthy();
+  expect(screen.queryByText(/No key/)).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+  expect(screen.getByText(/may be waking up/)).toBeTruthy();
+  await act(async () => {
+    release(response({ has_server_key: true, provider: "openai", model: "gpt-4.1-mini", demo_today: "2026-03-05", consent_scenarios: ["default", "timeout"] }));
+  });
+  expect(screen.getByText(/Using demo key/)).toBeTruthy();
+  expect(screen.queryByText(/may be waking up/)).toBeNull();
+});
