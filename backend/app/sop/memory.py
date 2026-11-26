@@ -19,11 +19,15 @@ def apply_extraction(state: SessionState, ex: Extraction, turn: int) -> None:
         for field in ex.refused_fields:
             state.identity.refuse(field, turn)
 
+    # Who is calling is settled once verification matched someone: a later message (e.g. a
+    # representative asking "why was her claim denied?" while consent is pending) must not
+    # re-label them.
     if phase == Phase.VERIFY_ID:
-        if ex.caller_role != "unknown":
+        if ex.caller_role != "unknown" and state.verified_party_id is None:
             state.caller.role = ex.caller_role
         rep = ex.representative
-        if rep is not None:
+        # A representative may still complete their own details (REP_CHECK) before access.
+        if rep is not None and not state.access_granted:
             if rep.rep_name:
                 state.caller.rep_name = rep.rep_name
             if rep.relationship:

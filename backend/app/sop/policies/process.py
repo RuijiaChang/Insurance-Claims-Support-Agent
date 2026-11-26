@@ -50,6 +50,10 @@ def handle_process(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepR
         )
 
     question = ex.question or ctx.user_text
+    if not question.strip() and state.turn_intent is None:
+        # Reached without new words (consent approved on a background poll): answer what
+        # the caller asked earlier, e.g. a representative's "why was it denied?".
+        state.turn_intent = state.primary_intent
     if "cannot_obtain" in ex.acts:
         if case.case_id in state.alternatives_offered:
             return _docs_exhausted(ctx)

@@ -871,11 +871,14 @@ def test_s7c_question_asked_while_waiting_is_answered_on_approval(
         case_hints={"case_type": "healthcare", "status": "denied"},
         question="Why was the claim denied?",
     )
-    c.poll()  # approved on the second poll (the message above was the first)
+    result = c.poll()  # approved on the second poll (the message above was the first)
     assert c.state.access_granted
     assert c.state.active_case_id == "CL-2048"
     assert c.state.phase == Phase.PROCESS_CASE
     assert c.kinds[0] == "consent_approved" and "case_selected" in c.kinds
+    # The poll path is template-only: it must still answer the remembered denial question.
+    assert c.ctx.facts.get("turn_intent") == "denial_question"
+    assert "was denied because" in _reply(result)
 
 
 def test_stray_poll_after_consent_is_ignored(repo: FixtureRepo, sop: SopConfig) -> None:
@@ -887,3 +890,17 @@ def test_stray_poll_after_consent_is_ignored(repo: FixtureRepo, sop: SopConfig) 
     turns, phase = c.state.counters.turns, c.state.phase
     late = c.poll()  # e.g. a poll already in flight when approval landed
     assert late.messages == [] and c.state.counters.turns == turns and c.state.phase == phase
+
+
+def test_caller_role_is_fixed_once_verified(repo: FixtureRepo, sop: SopConfig) -> None:
+    c = Convo(repo, sop)
+    c.say(DAVID_TEXT, **DAVID_EX)
+    assert c.state.caller.role == "representative"
+    # Live: the extractor labelled this follow-up "policyholder" while consent was pending.
+    c.say(
+        "While we wait, why was her claim denied?",
+        caller_role="policyholder",
+        acts=["ask_question"],
+    )
+    c.poll()
+    assert c.state.access_granted and c.state.caller.role == "representative"
