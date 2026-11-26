@@ -190,7 +190,7 @@ async def validate_key(body: ValidateKeyIn, request: Request) -> ValidateKeyOut:
     client = request.app.state.llm_client_factory(cfg)
     try:
         await run_in_threadpool(
-            lambda: client.chat([{"role": "user", "content": "ping"}], max_tokens=1)
+            lambda: client.chat([{"role": "user", "content": "ping"}], max_tokens=16)
         )
     except LLMError as e:
         return ValidateKeyOut(ok=False, error=e.kind)
@@ -270,7 +270,8 @@ def delete_session(session_id: str, request: Request) -> Response:
 
 
 def _api_error(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, ApiError)
+    if not isinstance(exc, ApiError):  # registered for ApiError only
+        raise exc
     content: dict[str, Any] = {"code": exc.code}
     if exc.detail is not None:
         content["detail"] = exc.detail
@@ -279,7 +280,8 @@ def _api_error(request: Request, exc: Exception) -> JSONResponse:
 
 def _validation_error(request: Request, exc: Exception) -> JSONResponse:
     # Location and message only: never echo the rejected input (it may hold a key).
-    assert isinstance(exc, RequestValidationError)
+    if not isinstance(exc, RequestValidationError):  # registered for this type only
+        raise exc
     detail = [{"loc": list(e.get("loc", ())), "msg": e.get("msg", "")} for e in exc.errors()]
     return JSONResponse({"code": "invalid_request", "detail": detail}, status_code=422)
 

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -17,14 +19,25 @@ from app.tools.email import Outbox
 DEV_ORIGINS = ["http://localhost:5173"]
 
 
+def _configure_logging(level: str) -> None:
+    """Apply LOG_LEVEL to the app's loggers (uvicorn keeps its own ``--log-level``)."""
+    app_logger = logging.getLogger("app")
+    app_logger.setLevel(level)
+    if not logging.getLogger().handlers and not app_logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s - %(message)s"))
+        app_logger.addHandler(handler)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the FastAPI app and attach its collaborators to ``app.state``.
 
     ``llm_factory`` (ProviderConfig -> LLMBundle), ``llm_client_factory`` (for key
     validation) and ``event_bundle`` are plain attributes so tests can replace them.
     """
-    install_key_redaction()
     settings = settings or get_settings()
+    _configure_logging(settings.log_level)
+    install_key_redaction()
     app = FastAPI(title="SOP Insurance Claims Support Agent")
     sop = load_sop_config(settings.sop_config_path)
     repo = load_repo(settings.fixtures_dir)

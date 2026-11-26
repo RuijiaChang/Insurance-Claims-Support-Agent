@@ -25,7 +25,7 @@ ProviderName = Literal["openai", "deepseek", "custom"]
 
 _DEEPSEEK_URL = "https://api.deepseek.com"
 _OPENAI_URL = "https://api.openai.com/v1"
-_DEFAULT_MODELS: dict[str, str] = {"openai": "gpt-5-mini", "deepseek": "deepseek-chat"}
+_DEFAULT_MODELS: dict[str, str] = {"openai": "gpt-4.1-mini", "deepseek": "deepseek-chat"}
 # name -> (supports_structured, supports_tools)
 _CAPABILITIES: dict[str, tuple[bool, bool]] = {
     "openai": (True, True),
@@ -209,12 +209,25 @@ class LLMClient:
                 kw["max_tokens"] = max_tokens
         return kw
 
+    def _is_model_error(self, e: openai.APIStatusError) -> bool:
+        """True when the provider rejected the request because of the chosen model."""
+        if isinstance(e, openai.NotFoundError):
+            return True
+        body = e.body if isinstance(e.body, dict) else {}
+        if body.get("param") == "model" or body.get("code") == "model_not_found":
+            return True
+        return bool(self._cfg.model) and self._cfg.model in str(e.message)
+
     def _call(self, fn: Callable[[], Any]) -> Any:
         attempt = 0
         while True:
             try:
                 return fn()
-            except (openai.AuthenticationError, openai.PermissionDeniedError) as e:
+            except openai.AuthenticationError as e:
+                raise LLMError("auth", "Authentication failed") from e
+            except openai.PermissionDeniedError as e:
+                if self._is_model_error(e):
+                    raise LLMError("model_unavailable", "Model not available for this key") from e
                 raise LLMError("auth", "Authentication failed") from e
             except openai.APITimeoutError as e:
                 raise LLMError("timeout", "Request timed out") from e
@@ -222,6 +235,8 @@ class LLMClient:
                 raise LLMError("other", "Connection error") from e
             except openai.APIStatusError as e:
                 rate = isinstance(e, openai.RateLimitError)
+                if e.status_code in (400, 404) and self._is_model_error(e):
+                    raise LLMError("model_unavailable", "Model not available for this key") from e
                 if not (rate or e.status_code >= 500):
                     raise LLMError("other", f"Provider returned HTTP {e.status_code}") from e
                 if attempt >= len(_RETRY_SLEEPS):

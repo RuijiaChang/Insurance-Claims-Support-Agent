@@ -1,6 +1,7 @@
 from datetime import date
 
 from app.data.repo import FixtureRepo, Policyholder
+from app.llm.regex_extractor import extract_regex
 from app.tools.identity import (
     IDENTITY_FIELDS,
     IdentityField,
@@ -8,6 +9,7 @@ from app.tools.identity import (
     find_candidates,
     match_representative,
     normalize_phone,
+    normalize_policy_number,
     normalize_relationship,
     parse_dob,
     verify,
@@ -113,6 +115,27 @@ def test_refused_not_counted(repo: FixtureRepo) -> None:
 def test_policy_number_locates_first(repo: FixtureRepo) -> None:
     c = find_candidates(good(), "POL-9921", repo.policyholders, T)
     assert [p.party_id for p in c] == ["P9"]
+
+
+def test_normalize_policy_number() -> None:
+    for raw in ("POL9921", "pol-9921", " Pol9921 ", "POL-9921"):
+        assert normalize_policy_number(raw) == "POL-9921"
+    assert normalize_policy_number("XYZ-1") == "XYZ-1"
+
+
+def test_compact_policy_number_locates_via_policy_lookup(repo: FixtureRepo) -> None:
+    # No identity fields at all: only the policy-number path can find the holder.
+    assert [p.party_id for p in find_candidates({}, "POL9921", repo.policyholders, T)] == ["P9"]
+    assert [p.party_id for p in find_candidates({}, "pol-9921", repo.policyholders, T)] == ["P9"]
+
+
+def test_compact_policy_number_from_text_verifies(repo: FixtureRepo) -> None:
+    hits = extract_regex("Margaret Chen, DOB 1985-03-15, SSN last four 4472, policy POL9921")
+    assert hits.policy_number == "POL-9921"
+    candidates = find_candidates(good(), hits.policy_number, repo.policyholders, T)
+    assert [p.party_id for p in candidates] == ["P9"]
+    out = verify(good(), set(), hits.policy_number, repo.policyholders, T, 3)
+    assert out.status == "pass" and out.party_id == "P9"
 
 
 def test_match_representative(repo: FixtureRepo) -> None:

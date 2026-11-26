@@ -121,7 +121,7 @@ def test_config_with_server_key() -> None:
     assert body == {
         "has_server_key": True,
         "provider": "openai",
-        "model": "gpt-5-mini",
+        "model": "gpt-4.1-mini",
         "demo_today": "2026-03-05",
         "consent_scenarios": ["default", "timeout"],
     }
@@ -407,7 +407,7 @@ def test_s24_server_key_rate_limited() -> None:
 
 
 def test_s24_client_model_ignored_with_server_key() -> None:
-    client, rec = _app(openai_model="gpt-5-mini")
+    client, rec = _app()
     sid = _new(client)
     r = _say(
         client,
@@ -422,7 +422,7 @@ def test_s24_client_model_ignored_with_server_key() -> None:
     assert r.status_code == 200
     cfg = rec.cfgs[-1]
     assert cfg.uses_server_key and cfg.api_key == SERVER_KEY
-    assert (cfg.name, cfg.base_url, cfg.model) == ("openai", None, "gpt-5-mini")
+    assert (cfg.name, cfg.base_url, cfg.model) == ("openai", None, "gpt-4.1-mini")
     assert SERVER_KEY not in r.text
 
 
@@ -531,7 +531,7 @@ def test_validate_key_ok_uses_request_values() -> None:
     assert r.status_code == 200 and r.json() == {"ok": True}
     cfg, kw = seen
     assert cfg.api_key == USER_KEY and not cfg.uses_server_key and cfg.name == "deepseek"
-    assert kw == {"max_tokens": 1}
+    assert kw == {"max_tokens": 16}
 
 
 def test_validate_key_reports_error_kind() -> None:
@@ -582,6 +582,20 @@ def test_log_redacts_keys(caplog: pytest.LogCaptureFixture) -> None:
     assert "sk-abcdefgh12345678" not in text
     assert "sk-***" in text and "short sk-abc" in text
     assert all("sk-user" not in r.getMessage() for r in caplog.records)
+
+
+def test_log_level_setting_controls_app_loggers() -> None:
+    app_logger = logging.getLogger("app")
+    previous = app_logger.level
+    try:
+        create_app(_settings(log_level="debug"))
+        assert app_logger.level == logging.DEBUG
+        create_app(_settings(log_level="WARNING"))
+        assert logging.getLogger("app.api").getEffectiveLevel() == logging.WARNING
+    finally:
+        app_logger.setLevel(previous)
+    with pytest.raises(ValueError):
+        _settings(log_level="loud")
 
 
 def test_unexpected_exception_returns_500_without_traceback(

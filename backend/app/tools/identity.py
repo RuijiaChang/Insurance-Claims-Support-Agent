@@ -90,6 +90,16 @@ def normalize_email(s: str) -> str:
     return s.strip().casefold()
 
 
+_POLICY_NUMBER = re.compile(r"POL-?(\d+)")
+
+
+def normalize_policy_number(s: str) -> str:
+    """Canonical policy number: ``POL9921`` / ``pol-9921`` -> ``POL-9921``."""
+    key = s.strip().upper()
+    m = _POLICY_NUMBER.fullmatch(key)
+    return f"POL-{m.group(1)}" if m else key
+
+
 def normalize_last4(s: str) -> str | None:
     digits = re.sub(r"\D", "", s)
     return digits if len(digits) == 4 else None
@@ -144,8 +154,8 @@ def find_candidates(
 ) -> list[Policyholder]:
     """Locate candidate holders: by policy number if given, else by any matching field."""
     if policy_number:
-        key = policy_number.strip().upper()
-        by_policy = [h for h in holders if h.policy_number.upper() == key]
+        key = normalize_policy_number(policy_number)
+        by_policy = [h for h in holders if normalize_policy_number(h.policy_number) == key]
         if by_policy:
             return by_policy
     fields = _provided(values, set())

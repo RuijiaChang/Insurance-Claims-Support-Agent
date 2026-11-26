@@ -77,7 +77,8 @@ def decide(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> TurnPlan:
 
     guard = apply_global_guards(state, ex, ctx)
     if guard.stop:
-        assert guard.step is not None
+        if guard.step is None:
+            raise RuntimeError("A stopping global guard must provide a step")
         step = guard.step
         directives = list(step.directives)
         replies = list(step.quick_replies)

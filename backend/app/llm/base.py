@@ -13,7 +13,7 @@ from app.sop.phases import Phase
 from app.sop.plan import EmailComposer
 from app.sop.state import PendingQuestion
 
-LLMErrorKind = Literal["auth", "rate_limit", "timeout", "other"]
+LLMErrorKind = Literal["auth", "model_unavailable", "rate_limit", "timeout", "other"]
 
 
 class LLMError(Exception):

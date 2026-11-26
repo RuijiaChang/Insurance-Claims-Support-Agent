@@ -24,7 +24,8 @@ def _replies(pairs: list[tuple[str, str]]) -> list[QuickReply]:
 
 
 def handle_post(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepResult:
-    assert state.verified_party_id is not None
+    if state.verified_party_id is None:
+        raise RuntimeError("POST_PROCESS reached without a verified policyholder")
     holder = ctx.repo.holder(state.verified_party_id)
     to_masked = mask_email(holder.email)
     pending = state.pending_question.kind if state.pending_question else None
@@ -62,7 +63,8 @@ def handle_post(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepResu
         return _finish(state, ctx, [Directive(kind="email_skipped")])
 
     if in_preview and (action == "email_confirm" or "affirm" in acts or "email_send" in acts):
-        assert state.email.preview is not None
+        if state.email.preview is None:
+            raise RuntimeError("Email confirmation without a preview")
         message_id = ctx.outbox.send(ctx.session_id, holder.email, state.email.preview)
         state.email.decision = "send"
         state.email.sent_message_id = message_id

@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass
 
-from app.tools.identity import normalize_email, normalize_phone
+from app.tools.identity import normalize_email, normalize_phone, normalize_policy_number
 
 _MONTHS = (
     r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|"
@@ -89,6 +89,11 @@ def _upper_match(pattern: re.Pattern[str], text: str) -> str | None:
     return m.group(0).upper() if m else None
 
 
+def _policy_number(text: str) -> str | None:
+    m = _POLICY.search(text)
+    return normalize_policy_number(m.group(0)) if m else None
+
+
 def extract_regex(text: str) -> RegexHits:
     email = _EMAIL.search(text)
     return RegexHits(
@@ -96,6 +101,6 @@ def extract_regex(text: str) -> RegexHits:
         phone=_find_phone(text),
         email=normalize_email(email.group(0)) if email else None,
         id_last4=_find_last4(text),
-        policy_number=_upper_match(_POLICY, text),
+        policy_number=_policy_number(text),
         case_id=_upper_match(_CASE, text),
     )

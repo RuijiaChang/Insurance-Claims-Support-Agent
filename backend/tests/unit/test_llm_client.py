@@ -32,7 +32,7 @@ def _settings(**kw: Any) -> Settings:
 
 
 def test_header_key_overrides_server() -> None:
-    s = _settings(openai_api_key="srv", openai_model="gpt-5-mini")
+    s = _settings(openai_api_key="srv", openai_model="gpt-4.1-mini")
     cfg = resolve_provider(LLMHeaders(api_key="mine", provider="deepseek"), s)
     assert cfg.api_key == "mine"
     assert cfg.name == "deepseek"
@@ -44,17 +44,23 @@ def test_header_key_overrides_server() -> None:
 
 def test_header_key_defaults_to_openai() -> None:
     cfg = resolve_provider(LLMHeaders(api_key="k"), _settings())
-    assert (cfg.name, cfg.base_url, cfg.model) == ("openai", None, "gpt-5-mini")
+    assert (cfg.name, cfg.base_url, cfg.model) == ("openai", None, "gpt-4.1-mini")
     assert (cfg.supports_structured, cfg.supports_tools) == (True, True)
 
 
+def test_default_openai_model_is_gpt_4_1_mini() -> None:
+    assert resolve_provider(LLMHeaders(api_key="k"), _settings()).model == "gpt-4.1-mini"
+    srv = resolve_provider(LLMHeaders(), _settings(openai_api_key="srv"))
+    assert srv.model == "gpt-4.1-mini" and srv.uses_server_key
+
+
 def test_server_key_ignores_client_model() -> None:
-    s = _settings(openai_api_key="srv", openai_model="gpt-5-mini")
+    s = _settings(openai_api_key="srv", openai_model="gpt-4.1-mini")
     h = LLMHeaders(provider="custom", base_url="https://evil.example.com", model="gpt-4o")
     cfg = resolve_provider(h, s)
     assert cfg.uses_server_key is True
     assert cfg.api_key == "srv"
-    assert cfg.model == "gpt-5-mini"
+    assert cfg.model == "gpt-4.1-mini"
     assert cfg.name == "openai"
     assert cfg.base_url is None
 
@@ -153,7 +159,7 @@ def test_validate_base_url_accepts_public() -> None:
 # --- client ---
 
 
-def _cfg(model: str = "gpt-5-mini", structured: bool = True) -> ProviderConfig:
+def _cfg(model: str = "gpt-4.1-mini", structured: bool = True) -> ProviderConfig:
     return ProviderConfig(
         name="openai",
         base_url=None,
@@ -264,7 +270,7 @@ def test_connection_error_is_other() -> None:
 
 
 def test_gpt5_no_temperature() -> None:
-    c, reqs, _ = _make(lambda r, n: httpx.Response(200, json=_completion("hi")))
+    c, reqs, _ = _make(lambda r, n: httpx.Response(200, json=_completion("hi")), _cfg("gpt-5-mini"))
     c.chat([{"role": "user", "content": "x"}], max_tokens=5)
     body = json.loads(reqs[0].content)
     assert "temperature" not in body
@@ -359,6 +365,35 @@ def test_structured_parse_sdk_errors_wrapped() -> None:
     assert ei.value.kind == "other"
 
 
+def _err(message: str, **extra: Any) -> dict[str, Any]:
+    return {"error": {"message": message, "type": "invalid_request_error", **extra}}
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        (404, _err("The model `gpt-4.1-mini` does not exist", code="model_not_found")),
+        (400, _err("Your organization must be verified to use the model `gpt-4.1-mini`.")),
+        (400, _err("Unsupported value", param="model")),
+        (403, _err("Project does not have access to model `gpt-4.1-mini`")),
+    ],
+)
+def test_model_errors_are_model_unavailable(status: int, body: dict[str, Any]) -> None:
+    c, reqs, _ = _make(lambda r, n: httpx.Response(status, json=body))
+    with pytest.raises(LLMError) as ei:
+        c.chat([{"role": "user", "content": "x"}])
+    assert ei.value.kind == "model_unavailable"
+    assert len(reqs) == 1
+
+
+def test_other_bad_request_stays_other() -> None:
+    body = _err("This model's maximum context length is 128000 tokens.", param="messages")
+    c, _, _ = _make(lambda r, n: httpx.Response(400, json=body))
+    with pytest.raises(LLMError) as ei:
+        c.chat([{"role": "user", "content": "x"}])
+    assert ei.value.kind == "other"
+
+
 def test_blank_base_url_env_does_not_leak_into_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_BASE_URL", "")
     c, reqs, _ = _make(lambda r, n: httpx.Response(200, json=_completion("hi")))
@@ -375,7 +410,7 @@ def test_blank_env_values_are_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(MissingApiKey):
         resolve_provider(LLMHeaders(), s)
     cfg = resolve_provider(LLMHeaders(api_key="k"), s)
-    assert cfg.model == "gpt-5-mini"
+    assert cfg.model == "gpt-4.1-mini"
     monkeypatch.setenv("OPENAI_API_KEY", "srv")
     cfg = resolve_provider(LLMHeaders(), Settings(_env_file=None))  # type: ignore[call-arg]
-    assert cfg.model == "gpt-5-mini" and cfg.uses_server_key
+    assert cfg.model == "gpt-4.1-mini" and cfg.uses_server_key

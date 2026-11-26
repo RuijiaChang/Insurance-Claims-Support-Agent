@@ -229,3 +229,21 @@ def test_unclear_reply_reemits_prompt(repo: FixtureRepo, sop: SopConfig) -> None
     step = _turn(s, repo, sop, user_text="hmm")
     assert _kinds(step) == ["offer_email"]
     assert len(step.quick_replies) == 2
+
+
+def test_post_without_verified_holder_raises_explicit_error(
+    repo: FixtureRepo, sop: SopConfig
+) -> None:
+    # An explicit check, not an `assert`: it must hold even under `python -O`.
+    s = _state()
+    s.verified_party_id = None
+    with pytest.raises(RuntimeError, match="verified"):
+        _turn(s, repo, sop)
+
+
+def test_confirm_without_preview_raises_explicit_error(repo: FixtureRepo, sop: SopConfig) -> None:
+    s = _state()
+    s.pending_question = PendingQuestion(kind="confirm_send")
+    s.email.preview = None
+    with pytest.raises(RuntimeError, match="preview"):
+        _turn(s, repo, sop, action="email_confirm")

@@ -86,4 +86,4 @@ def test_dob_numeric_separators_and_compact_policy() -> None:
         assert hits.dob_raw == value
         assert parse_dob(hits.dob_raw) == [date(1985, 3, 15)]
         assert hits.id_last4 == "6688"
-        assert hits.policy_number == "POL9921"
+        assert hits.policy_number == "POL-9921"

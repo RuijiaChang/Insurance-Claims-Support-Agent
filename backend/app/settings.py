@@ -8,6 +8,7 @@ from pydantic import BaseModel, field_validator
 from pydantic_settings import BaseSettings
 
 _APP_DIR = Path(__file__).resolve().parent
+_LOG_LEVELS = ("CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG")
 
 
 class Settings(BaseSettings):
@@ -37,6 +38,14 @@ class Settings(BaseSettings):
         if isinstance(v, str) and not v.strip():
             return None
         return v
+
+    @field_validator("log_level")
+    @classmethod
+    def _known_log_level(cls, v: str) -> str:
+        level = v.strip().upper()
+        if level not in _LOG_LEVELS:
+            raise ValueError(f"LOG_LEVEL must be one of {', '.join(_LOG_LEVELS)}")
+        return level
 
     frontend_dir: Path = Path(__file__).resolve().parents[2] / "frontend/dist"
     # With one trusted proxy, key rate limits on the rightmost X-Forwarded-For entry.
