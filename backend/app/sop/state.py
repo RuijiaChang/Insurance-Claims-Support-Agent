@@ -160,6 +160,9 @@ class SessionState(BaseModel):
     verified_party_id: str | None = None
     access_granted: bool = False
     verification_failures: int = 0
+    # Canonical form of the identity data behind the last failed comparison; an
+    # unchanged submission is not compared (or counted) again.
+    last_failed_fingerprint: str | None = None
     consent: ConsentState = Field(default_factory=ConsentState)
     memory: Memory = Field(default_factory=Memory)
     active_case_id: str | None = None

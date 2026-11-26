@@ -10,6 +10,7 @@ Handlers never change phase themselves: they return ``StepResult.transition``.
 """
 
 import calendar
+import json
 
 from app.sop.extraction import Extraction
 from app.sop.phases import Phase, SubState
@@ -18,7 +19,7 @@ from app.sop.policies.handoff import start_handoff
 from app.sop.state import PendingQuestion, SessionState
 from app.tools.consent import poll_consent, request_consent, resend_consent
 from app.tools.email import mask_phone
-from app.tools.identity import IDENTITY_FIELDS, match_representative, verify
+from app.tools.identity import match_representative, verify
 
 HANDOFF_REPLY = QuickReply(label="Talk to a representative", action="handoff_accept")
 END_REPLY = QuickReply(label="End conversation", action="end_session")
@@ -47,13 +48,16 @@ def handle_verify(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepRe
 # --- COLLECTING ---------------------------------------------------------------
 
 
-def _has_identity_input(ex: Extraction) -> bool:
-    ident = ex.identity
-    return (
-        any(getattr(ident, f) is not None for f in IDENTITY_FIELDS)
-        or ident.policy_number is not None
-        or bool(ex.refused_fields)
-    )
+def _comparison_fingerprint(state: SessionState) -> str:
+    """Canonical form of exactly what a comparison would use.
+
+    Restating a stored value, or refusing a field that was never given, leaves it
+    unchanged, so the same submission is never counted as a second failure.
+    """
+    identity = state.identity
+    refused = identity.refused()
+    usable = {f: sorted(v) for f, v in identity.values().items() if f not in refused}
+    return json.dumps({"values": usable, "policy_number": identity.policy_number}, sort_keys=True)
 
 
 def _collecting(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepResult:
@@ -68,7 +72,7 @@ def _collecting(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepResu
             kind="need_identity",
             data={"needed": cfg.min_matched_fields - provided, "options": options},
         )
-    elif _has_identity_input(ex) or state.verification_failures == 0:
+    elif (fingerprint := _comparison_fingerprint(state)) != state.last_failed_fingerprint:
         outcome = verify(
             identity.values(),
             identity.refused(),
@@ -85,12 +89,13 @@ def _collecting(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepResu
             step.directives = pre + step.directives
             return step
         state.verification_failures += 1
+        state.last_failed_fingerprint = fingerprint
         if state.verification_failures >= cfg.max_failures:
             return _lock(state, ctx)
         # Deliberately only the option list: no field-level result, no account hint.
         main = Directive(kind="verify_failed", data={"options": options})
     else:
-        # Nothing new since the last failed attempt: repeat without counting a failure.
+        # Same data as the last failed comparison: repeat without counting a failure.
         main = Directive(kind="verify_failed", data={"options": options, "repeat": True})
 
     state.pending_question = PendingQuestion(kind="need_identity")

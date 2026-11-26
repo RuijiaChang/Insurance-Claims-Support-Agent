@@ -311,3 +311,47 @@ def test_three_failures_lock_and_handoff(repo: FixtureRepo, sop: SopConfig) -> N
     assert state.handoff.verified is False
     assert _directive(step, "handoff_done")["ticket_id"] == state.handoff.ticket_id
     assert state.access_granted is False
+
+
+def _one_failure(state: SessionState, repo: FixtureRepo, sop: SopConfig) -> None:
+    _turn(state, repo, sop, ex(identity={**MARGARET, "dob": "1985-03-16"}))
+    assert state.verification_failures == 1
+
+
+def test_refusing_unprovided_field_after_failure_does_not_recount(
+    repo: FixtureRepo, sop: SopConfig
+) -> None:
+    state = SessionState.new("s1")
+    _one_failure(state, repo, sop)
+    step = _turn(state, repo, sop, ex(refused_fields=["email"], acts=["refuse_info"]), turn=2)
+    assert state.verification_failures == 1
+    assert _directive(step, "verify_failed")["repeat"] is True
+    step = _turn(state, repo, sop, ex(refused_fields=["id_last4"], acts=["refuse_info"]), turn=3)
+    assert state.verification_failures == 1
+    assert state.phase == Phase.VERIFY_ID
+
+
+def test_restating_same_value_after_failure_does_not_recount(
+    repo: FixtureRepo, sop: SopConfig
+) -> None:
+    state = SessionState.new("s1")
+    _one_failure(state, repo, sop)
+    for turn in (2, 3, 4):
+        step = _turn(state, repo, sop, ex(identity={"full_name": "Margaret Chen"}), turn=turn)
+        assert _directive(step, "verify_failed")["repeat"] is True
+    assert state.verification_failures == 1
+    assert state.phase == Phase.VERIFY_ID
+
+
+def test_changed_value_after_failure_compares_again(repo: FixtureRepo, sop: SopConfig) -> None:
+    state = SessionState.new("s1")
+    _one_failure(state, repo, sop)
+    step = _turn(state, repo, sop, ex(identity={"dob": "1985-03-17"}), turn=2)
+    assert state.verification_failures == 2
+    assert "repeat" not in _directive(step, "verify_failed")
+
+    other = SessionState.new("s2")
+    _one_failure(other, repo, sop)
+    step = _turn(other, repo, sop, ex(identity={"dob": "1985-03-15"}), turn=2)
+    assert _kinds(step) == ["confirm_verified"]
+    assert other.verification_failures == 1
