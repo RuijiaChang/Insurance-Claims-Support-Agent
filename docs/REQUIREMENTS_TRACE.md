@@ -1,0 +1,40 @@
+# Requirements trace
+
+This maps the assignment to implementation entry points and verification. Python test IDs are relative to `backend/`. Frontend test names are in `frontend/src/__tests__/`.
+
+## Core workflow and demo
+
+| Requirement | Implementation | Evidence |
+| --- | --- | --- |
+| Fixed order VERIFY_ID → RESOLVE_INTENT → PROCESS_CASE → POST_PROCESS, with natural conversation | `backend/app/sop/engine.py:Engine.handle_turn`, `decide`; `backend/app/llm/responder.py:LLMResponder.respond` | `tests/scenarios/test_scenarios.py::test_s1_margaret_happy_path`, `tests/unit/test_decide_context.py::test_only_decide_calls_transition` |
+| Enforce three matching PII fields among name, DOB, phone, email, and ID suffix. Policy number locates a candidate. | `backend/app/sop/policies/verify.py:handle_verify`; `backend/app/tools/identity.py:verify` | `tests/unit/test_identity.py::test_verify_pass_margaret`, `tests/unit/test_identity.py::test_policy_number_locates_first`, `tests/scenarios/test_scenarios.py::test_s23_three_match_one_mismatch_fails` |
+| Withhold record facts until verification and consent where applicable | `backend/app/sop/context.py:build_context`; `backend/app/guards/output_guard.py:check_reply` | `tests/scenarios/test_scenarios.py::test_s2_no_record_data_in_prompts_before_resolve`, `tests/scenarios/test_scenarios.py::test_s7b_question_while_consent_pending_leaks_nothing` |
+| Handle partial answers, clarification, refusals, and alternate identity fields | `backend/app/sop/policies/verify.py:handle_verify`; `backend/app/sop/memory.py:apply_extraction` | `tests/scenarios/test_scenarios.py::test_s3_two_fields_asks_for_one_more`, `tests/unit/test_policy_verify.py::test_ask_why_explains`, `tests/scenarios/test_scenarios.py::test_s6_refused_ssn_offers_alternatives_then_human` |
+| Interpret ambiguous wording and resolve claim ambiguity | `backend/app/llm/extractor.py:LLMExtractor.extract`; `backend/app/sop/policies/resolve.py:handle_resolve`; `backend/app/tools/claims.py:score_cases` | `tests/scenarios/test_engine_core.py::test_extract_context_carries_last_agent_message`, `tests/scenarios/test_scenarios.py::test_s1b_january_healthcare_is_ambiguous` |
+| Use grounded case facts and bounded workflow paths | `backend/app/sop/policies/process.py:handle_process`; `backend/app/tools/registry.py:execute_tool`; `backend/app/guards/output_guard.py:check_reply` | `tests/unit/test_registry.py::test_registry_denies_other_party_case`, `tests/scenarios/test_scenarios.py::test_s21_submission_timing_beats_processing_time`, `tests/unit/test_output_guard.py::test_ungrounded_amount_flagged` |
+| Offer a summary covering discussion, outcome, and next steps. Allow send or skip. | `backend/app/sop/policies/post.py:handle_post`; `backend/app/sop/email_summary.py:build_email_draft`; `backend/app/api/routes.py:get_outbox` | `tests/unit/test_policy_post.py::test_preview_then_send_closes`, `tests/scenarios/test_scenarios.py::test_s11_skip_email`, `tests/api/test_api.py::test_outbox_endpoint_after_send` |
+| Politely refuse unrelated questions and offer a human on repeated attempts | `backend/app/sop/policies/global_guards.py:apply_global_guards`, `_decline_off_topic` | `tests/scenarios/test_scenarios.py::test_s10_off_topic_three_times_offers_human`, `tests/unit/test_templates.py::test_decline_off_topic_pulls_back_to_step` |
+| Remember useful information during any phase for later use | `backend/app/sop/memory.py:apply_extraction` | `tests/unit/test_extraction_memory.py::test_margaret_hints_captured_in_verify`, `tests/unit/test_extraction_memory.py::test_email_preference_remembered` |
+| Demo opener extracts Margaret's identity and verifies. Pre-verification turns protect claim data. | `backend/app/sop/engine.py:Engine.handle_turn`; `backend/app/sop/policies/verify.py:handle_verify` | `tests/scenarios/test_engine_core.py::test_engine_s1_first_turn`, `tests/scenarios/test_engine_core.py::test_engine_s2_no_leak_before_access` |
+| Demo remembers denied January healthcare and uses it to find CL-2048 without restarting intake | `backend/app/sop/memory.py:apply_extraction`; `backend/app/sop/policies/resolve.py:handle_resolve` | `tests/unit/test_policy_resolve.py::test_margaret_memory_selects_cl2048_and_hops` |
+| Demo answers naturally from grounded claims and tools while SOP controls phase order, gates, and allowed actions | `backend/app/sop/engine.py:decide`; `backend/app/sop/context.py:build_context`; `backend/app/tools/registry.py:execute_tool` | `tests/scenarios/test_scenarios.py::test_s1_margaret_happy_path`, `tests/unit/test_decide_context.py::test_only_decide_calls_transition`, `tests/unit/test_registry.py::test_registry_denies_before_access`, `tests/unit/test_registry.py::test_registry_denies_outside_process_phase` |
+
+## Bonus and example
+
+| Requirement | Implementation | Evidence |
+| --- | --- | --- |
+| 1. Recognize frustration, anxiety, anger, confusion, and refusal | `backend/app/sop/extraction.py:Extraction`; `backend/app/llm/extractor.py:LLMExtractor.extract`; `backend/app/sop/policies/emotion.py:emotion_directives` | `tests/unit/test_extraction_memory.py::test_intent_and_emotion`, `tests/unit/test_emotion.py::test_l2_neutral_refusal_counts_toward_budget` |
+| 2. Respond with empathy and de-escalation first | `backend/app/sop/policies/emotion.py:emotion_directives`; `backend/app/sop/engine.py:decide` | `tests/unit/test_emotion.py::test_l1_first_negative_emotion_empathizes`, `tests/unit/test_decide_context.py::test_guard_extra_directives_come_first` |
+| 3. Explain why identity verification and consent matter | `backend/app/sop/policies/verify.py:handle_verify`; `backend/app/sop/policies/emotion.py:emotion_directives` | `tests/unit/test_policy_verify.py::test_ask_why_explains`, `tests/scenarios/test_scenarios.py::test_s7b_question_while_consent_pending_leaks_nothing` |
+| 4. Encourage continuation within required gates | `backend/app/sop/policies/emotion.py:emotion_directives`; `backend/app/sop/policies/verify.py:handle_verify` | `tests/unit/test_emotion.py::test_l2_on_bonus_example`, `tests/scenarios/test_scenarios.py::test_s5b_bypass_with_full_identity_still_verifies` |
+| 5. Offer alternatives and stop persuading when escalation is appropriate | `backend/app/sop/policies/emotion.py:emotion_directives`; `backend/app/sop/policies/handoff.py:start_handoff` | `tests/scenarios/test_scenarios.py::test_s6_refused_ssn_offers_alternatives_then_human`, `tests/unit/test_emotion.py::test_l3_declined_only_restates` |
+| Example: acknowledge the angry caller, explain the gate, and offer allowed fields while withholding claim facts | `backend/app/sop/policies/global_guards.py:apply_global_guards`; `backend/app/sop/policies/verify.py:handle_verify`; `backend/app/sop/context.py:build_context` | `tests/scenarios/test_scenarios.py::test_s5_angry_caller_gets_l2_without_disclosure`, `tests/unit/test_emotion.py::test_l2_on_bonus_example` |
+
+## Delivery
+
+| Requirement | Implementation | Evidence |
+| --- | --- | --- |
+| 1. Hosted demo or Docker repository with clear setup | `Dockerfile`, `docker-compose.yml`, [README](../README.md), `backend/app/api/routes.py:health` | `tests/test_health.py::test_health_ok`, `tests/api/test_api.py::test_static_frontend_mounted_when_present` |
+| 2. Accept an API token | `backend/app/llm/client.py:resolve_provider`; `backend/app/api/routes.py:validate_key`; `frontend/src/components/KeyDialog.tsx` | `tests/api/test_api.py::test_client_key_header_used`, `tests/api/test_api.py::test_config_with_server_key`, `tests/api/test_api.py::test_validate_key_ok_uses_request_values` |
+| 3. Natural-language chat UI | `frontend/src/App.tsx:App`; `frontend/src/components/Chat.tsx`; `backend/app/api/routes.py:post_message` | `App.test.tsx` — “fills the composer from a phase suggestion without sending it”; `tests/api/test_api.py::test_message_flow_margaret` |
+| 4. Demonstrate the full workflow | [Demo script](DEMO_SCRIPT.md); `frontend/src/scenarios.ts`; `backend/app/sop/engine.py:Engine.handle_turn` | `tests/scenarios/test_scenarios.py::test_s1_margaret_happy_path`, `tests/api/test_api.py::test_outbox_endpoint_after_send` |
