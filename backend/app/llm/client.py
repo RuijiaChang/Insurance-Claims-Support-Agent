@@ -186,6 +186,10 @@ class LLMClient:
         )
 
     @property
+    def config(self) -> ProviderConfig:
+        return self._cfg
+
+    @property
     def _is_gpt5(self) -> bool:
         return self._cfg.model.startswith("gpt-5")
 

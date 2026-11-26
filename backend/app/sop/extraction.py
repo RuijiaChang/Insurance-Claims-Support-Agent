@@ -2,7 +2,8 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.config import JsonDict
 
 from app.llm.regex_extractor import RegexHits
 from app.tools.claims import CaseHintsInput
@@ -40,7 +41,21 @@ UserAct = Literal[
 ]
 
 
+def _drop_property_defaults(schema: JsonDict) -> None:
+    """OpenAI strict structured outputs reject ``default``; the Python defaults still apply."""
+    properties = schema.get("properties")
+    if isinstance(properties, dict):
+        for prop in properties.values():
+            if isinstance(prop, dict):
+                prop.pop("default", None)
+
+
+_STRICT_SCHEMA = ConfigDict(json_schema_extra=_drop_property_defaults)
+
+
 class IdentityFields(BaseModel):
+    model_config = _STRICT_SCHEMA
+
     full_name: str | None = None
     dob: str | None = None
     phone: str | None = None
@@ -50,6 +65,8 @@ class IdentityFields(BaseModel):
 
 
 class RepInfo(BaseModel):
+    model_config = _STRICT_SCHEMA
+
     rep_name: str | None = None
     relationship: Relationship | None = None
     policyholder_name: str | None = None
@@ -63,6 +80,8 @@ def _clean(value: str | None) -> str | None:
 
 
 class CaseHints(BaseModel):
+    model_config = _STRICT_SCHEMA
+
     case_id: str | None = None
     case_type: Literal["healthcare", "dental", "auto"] | None = None
     status: Literal["denied", "closed", "open"] | None = None
@@ -81,11 +100,15 @@ class CaseHints(BaseModel):
 
 
 class Emotion(BaseModel):
+    model_config = _STRICT_SCHEMA
+
     label: Literal["neutral", "frustrated", "anxious", "angry", "confused", "refusing"] = "neutral"
     intensity: int = Field(default=0, ge=0, le=3)
 
 
 class Extraction(BaseModel):
+    model_config = _STRICT_SCHEMA
+
     identity: IdentityFields = Field(default_factory=IdentityFields)
     refused_fields: list[IdentityField] = Field(default_factory=list)
     caller_role: Literal["policyholder", "representative", "unknown"] = "unknown"
