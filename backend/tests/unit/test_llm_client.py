@@ -117,6 +117,10 @@ def test_custom_valid() -> None:
         "https://[::1]",
         "https://0.0.0.0",
         "https:///nohost",
+        "https://a.com:99999",
+        "https://100.64.0.1",
+        "https://[fec0::1]",
+        "https://u:p@api.example.com",
     ],
 )
 def test_validate_base_url_rejects(url: str) -> None:
@@ -309,3 +313,47 @@ def test_parse_json_mode_recovers_on_retry() -> None:
     c, reqs, _ = _make(h, _cfg("deepseek-chat", False))
     assert c.parse([{"role": "user", "content": "x"}], Out) == Out(a=1)
     assert len(reqs) == 2
+
+
+def test_validate_rejects_v4_mapped_and_decimal(monkeypatch: pytest.MonkeyPatch) -> None:
+    mapped = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::ffff:127.0.0.1", 443, 0, 0))]
+    monkeypatch.setattr(client_mod.socket, "getaddrinfo", lambda *a, **k: mapped)
+    with pytest.raises(InvalidProviderConfig):
+        validate_base_url("https://mapped.example.com")
+    loop = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 443))]
+    monkeypatch.setattr(client_mod.socket, "getaddrinfo", lambda *a, **k: loop)
+    with pytest.raises(InvalidProviderConfig):
+        validate_base_url("https://2130706433")
+
+
+def test_api_key_not_in_repr() -> None:
+    assert "sk-secret" not in repr(_cfg())
+    assert "sk-secret" not in repr(LLMHeaders(api_key="sk-secret"))
+
+
+def test_redirect_not_followed_and_is_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        seen.append(req)
+        return httpx.Response(307, headers={"location": "http://169.254.169.254/x"})
+
+    real = httpx.Client
+    # Exercise the default-client path (follow_redirects=False) over a mock transport.
+    monkeypatch.setattr(
+        client_mod.openai,
+        "DefaultHttpxClient",
+        lambda **kw: real(transport=httpx.MockTransport(handler), **kw),
+    )
+    c = LLMClient(_cfg(), sleep=lambda s: None)
+    with pytest.raises(LLMError) as ei:
+        c.chat([{"role": "user", "content": "x"}])
+    assert ei.value.kind == "other"
+    assert len(seen) == 1
+
+
+def test_structured_parse_sdk_errors_wrapped() -> None:
+    c, _, _ = _make(lambda r, n: httpx.Response(200, json=_completion("not json")))
+    with pytest.raises(LLMError) as ei:
+        c.parse([{"role": "user", "content": "x"}], Out)
+    assert ei.value.kind == "other"

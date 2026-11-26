@@ -9,7 +9,7 @@ import ipaddress
 import socket
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, TypeVar
 from urllib.parse import urlparse
 
@@ -36,7 +36,7 @@ _RETRY_SLEEPS = (0.5, 1.0)
 
 @dataclass(frozen=True)
 class LLMHeaders:
-    api_key: str | None = None
+    api_key: str | None = field(default=None, repr=False)
     provider: str | None = None
     base_url: str | None = None
     model: str | None = None
@@ -47,7 +47,7 @@ class ProviderConfig:
     name: ProviderName
     base_url: str | None
     model: str
-    api_key: str = ""
+    api_key: str = field(default="", repr=False)
     supports_structured: bool = False
     supports_tools: bool = False
     uses_server_key: bool = False
@@ -63,7 +63,9 @@ class InvalidProviderConfig(Exception):
 
 def _blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return (
-        ip.is_private
+        not ip.is_global
+        or (isinstance(ip, ipaddress.IPv6Address) and ip.is_site_local)
+        or ip.is_private
         or ip.is_loopback
         or ip.is_link_local
         or ip.is_reserved
@@ -77,12 +79,16 @@ def validate_base_url(url: str) -> str:
     try:
         parsed = urlparse(url)
         host = parsed.hostname
+        port = parsed.port or 443
+        userinfo = parsed.username is not None or parsed.password is not None
     except ValueError as e:
         raise InvalidProviderConfig("Invalid base URL") from e
     if parsed.scheme != "https":
         raise InvalidProviderConfig("Base URL must use https")
     if not host:
         raise InvalidProviderConfig("Base URL must include a hostname")
+    if userinfo:
+        raise InvalidProviderConfig("Base URL must not contain credentials")
     host = host.rstrip(".").lower()
     if host == "localhost" or host.endswith(".localhost"):
         raise InvalidProviderConfig("Base URL host is not allowed")
@@ -95,7 +101,7 @@ def validate_base_url(url: str) -> str:
             raise InvalidProviderConfig("Base URL host is not allowed")
     else:
         try:
-            infos = socket.getaddrinfo(host, parsed.port or 443, type=socket.SOCK_STREAM)
+            infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
         except OSError as e:
             raise InvalidProviderConfig("Base URL host could not be resolved") from e
         if not infos:
@@ -106,6 +112,8 @@ def validate_base_url(url: str) -> str:
                 ip = ipaddress.ip_address(addr)
             except ValueError as e:
                 raise InvalidProviderConfig("Base URL resolved to an invalid address") from e
+            if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+                ip = ip.ipv4_mapped
             if _blocked_ip(ip):
                 raise InvalidProviderConfig("Base URL host is not allowed")
     return url.rstrip("/")
@@ -165,7 +173,10 @@ class LLMClient:
     ) -> None:
         self._cfg = cfg
         self._sleep = sleep
-        # SDK retries are disabled: retry/backoff policy lives in _call.
+        # SDK retries are disabled: retry/backoff policy lives in _call. Redirects are never
+        # followed (the SDK default is to follow), or a validated host could bounce us inward.
+        if http_client is None:
+            http_client = openai.DefaultHttpxClient(follow_redirects=False)
         self._client = OpenAI(
             api_key=cfg.api_key,
             base_url=cfg.base_url,
@@ -232,9 +243,14 @@ class LLMClient:
     def parse(self, messages: list[dict[str, Any]], schema: type[T]) -> T:
         if self._cfg.supports_structured:
             kw = self._kwargs(messages, 0, None)
-            resp = self._call(
-                lambda: self._client.chat.completions.parse(response_format=schema, **kw)
-            )
+            try:
+                resp = self._call(
+                    lambda: self._client.chat.completions.parse(response_format=schema, **kw)
+                )
+            except LLMError:
+                raise
+            except (openai.OpenAIError, ValidationError) as e:
+                raise LLMError("other", "Structured output could not be parsed") from e
             parsed = resp.choices[0].message.parsed
             if parsed is None:
                 raise LLMError("other", "Structured output could not be parsed")
