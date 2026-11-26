@@ -51,8 +51,9 @@ def handle_post(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepResu
             fact_scope="email" if in_preview else "none",
         )
 
+    # Ending the conversation at the offer or the preview is a skip, then the finish.
     skip = (
-        action == "email_skip"
+        action in ("email_skip", "end_session")
         or "email_skip" in acts
         or ("deny" in acts and pending in ("offer_email", "confirm_send"))
     )

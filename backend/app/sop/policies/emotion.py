@@ -4,6 +4,10 @@ L1 empathize -> L2 empathize + persuade (explain why, offer alternatives) ->
 L3 stop persuading and offer a human. Once the L3 offer is declined, each turn
 only restates the gate's requirement and keeps the handoff quick reply.
 
+An L3 offer is answered on the next turn or not at all: that turn reads
+``l3_offered`` (a "deny" then declines the offer) and clears it, so a later,
+unrelated "no" never switches on restate-only mode.
+
 No emotion ever changes a gate or causes a disclosure: this module only adds
 directives and updates counters.
 """
@@ -44,11 +48,15 @@ def emotion_directives(
 
     # Without a gate the L3 bookkeeping is kept under "verify" (controller ruling).
     key: Gate = gate or "verify"
-    if counters.l3_offered.get(key) and "deny" in ex.acts:
+    offered_last_turn = bool(counters.l3_offered.get(key))
+    counters.l3_offered.clear()
+    if offered_last_turn and "deny" in ex.acts:
         counters.l3_declined[key] = True
 
     declined = bool(counters.l3_declined.get(key))
     if declined and gate is not None:
+        # The handoff quick reply stays on offer, so accepting it is an emotion handoff.
+        state.handoff_offer_reason = "emotion"
         return [Directive(kind="restate_requirement", data={"gate": gate})], [HANDOFF_REPLY]
 
     refused = "refuse_info" in ex.acts or "bypass_attempt" in ex.acts or bool(ex.refused_fields)

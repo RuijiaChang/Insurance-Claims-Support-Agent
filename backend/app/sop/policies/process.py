@@ -34,7 +34,7 @@ _CASE_FIELD_INTENTS: frozenset[Intent] = frozenset(
 
 def handle_process(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepResult:
     case = _active_case(state, ctx)
-    if case is None or _wants_switch(ex, ctx, case):
+    if case is None or _wants_switch(state, ex, ctx, case):
         return StepResult(
             directives=[],
             quick_replies=[],
@@ -60,10 +60,10 @@ def handle_process(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepR
         alternatives = document_alternatives(
             ctx.repo, case, None, ctx.sop.process.doc_fuzzy_threshold
         )
-        return _answer(state, ctx, case, question, followup, alternatives)
+        return _answer(state, ctx, case, question, followup, alternatives, None)
 
     followup = match_followup(ctx.repo, case, question, state.turn_intent, ex.guidance_topic)
-    return _answer(state, ctx, case, question, followup, None)
+    return _answer(state, ctx, case, question, followup, None, ex.guidance_topic)
 
 
 def _active_case(state: SessionState, ctx: PolicyCtx) -> Claim | None:
@@ -79,7 +79,10 @@ def _same(a: str, b: str) -> bool:
     return a.strip().casefold() == b.strip().casefold()
 
 
-def _wants_switch(ex: Extraction, ctx: PolicyCtx, case: Claim) -> bool:
+def _wants_switch(state: SessionState, ex: Extraction, ctx: PolicyCtx, case: Claim) -> bool:
+    if state.case_selected_turn == ctx.turn:
+        # RESOLVE just picked this case from this very extraction: answer, don't bounce.
+        return False
     if "select_case" in ex.acts:
         return True
     action = ctx.action or ""
@@ -118,6 +121,7 @@ def _answer(
     question: str,
     followup: FollowupResult,
     alternatives: dict[str, str] | None,
+    asked_topic: GuidanceTopic | None,
 ) -> StepResult:
     data: dict[str, object] = {
         "question": question,
@@ -134,7 +138,11 @@ def _answer(
             Directive(kind="deadline_passed", data={"deadline": deadline.deadline.isoformat()})
         )
         offer_handoff = True
-    if followup.kind == "no_specific_guidance" and state.turn_intent not in _CASE_FIELD_INTENTS:
+    # The record itself answers status/payment/denial questions; anything else, or a
+    # guidance-type question (a topic was asked) that has no guidance here, gets no_data.
+    if followup.kind == "no_specific_guidance" and (
+        state.turn_intent not in _CASE_FIELD_INTENTS or asked_topic is not None
+    ):
         directives.append(Directive(kind="no_data"))
         offer_handoff = True
     directives.append(Directive(kind="anything_else"))

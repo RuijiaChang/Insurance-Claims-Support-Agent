@@ -9,8 +9,15 @@
 5. emotion directives (spec §9).
 
 A turn that also carries identity fields or case hints is treated as in scope,
-so a mixed message is never declined. Guards never change phase themselves:
-any change is returned through ``GuardDecision.step.transition``.
+so a mixed message is never declined.
+
+Handoff offers only live for one turn: ``handoff_offer_reason`` is read and
+cleared at the start of every turn (an offer made this turn sets it again), and
+``counters.l3_offered`` is cleared once the turn after the offer is over, so an
+ignored offer never colours a later handoff ticket or a later "no".
+
+Guards never change phase themselves: any change is returned through
+``GuardDecision.step.transition``.
 """
 
 from dataclasses import dataclass, field
@@ -44,7 +51,9 @@ class GuardDecision:
     extra_replies: list[QuickReply] = field(default_factory=list)
 
 
-def _stop(step: StepResult) -> GuardDecision:
+def _stop(state: SessionState, step: StepResult) -> GuardDecision:
+    # The emotion step, which consumes last turn's L3 offer, does not run this turn.
+    state.counters.l3_offered.clear()
     return GuardDecision(stop=True, step=step)
 
 
@@ -52,11 +61,16 @@ def apply_global_guards(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> 
     # 1. Terminal phases: no state change at all.
     if state.phase in (Phase.HANDOFF, Phase.CLOSED):
         return _stop(
+            state,
             StepResult(
                 directives=[Directive(kind="session_closed", data={"phase": state.phase.value})],
                 quick_replies=[],
-            )
+            ),
         )
+
+    # A handoff offer made last turn may be accepted now; otherwise it lapses.
+    offer_reason = state.handoff_offer_reason
+    state.handoff_offer_reason = None
 
     # 2. Actions and explicit human requests.
     if ctx.action == "end_session" and (
@@ -64,22 +78,22 @@ def apply_global_guards(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> 
     ):
         state.pending_question = None
         return _stop(
+            state,
             StepResult(
                 directives=[Directive(kind="closing")],
                 quick_replies=[],
                 transition=(Phase.CLOSED, SubState.NONE),
-            )
+            ),
         )
     if ctx.action == "handoff_accept" or "request_human" in ex.acts:
-        reason = _handoff_reason(state)
+        reason = _handoff_reason(state, offer_reason)
         state.pending_question = None
-        state.handoff_offer_reason = None
-        return _stop(start_handoff(state, reason, ctx))
+        return _stop(state, start_handoff(state, reason, ctx))
 
     # 3. Scope. A turn carrying identity or case data is in scope whatever its label.
     has_claim_data = _has_claim_data(ex)
     if ex.scope == "out_of_scope" and not has_claim_data:
-        return _stop(_decline_off_topic(state, ctx))
+        return _stop(state, _decline_off_topic(state, ctx))
 
     # 4. Not off-topic: the consecutive run is broken.
     state.counters.off_topic_consecutive = 0
@@ -90,7 +104,9 @@ def apply_global_guards(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> 
             data={"kb": kb_general(ctx.repo), "question": ex.question or ctx.user_text},
         )
         if not has_claim_data:
-            return _stop(StepResult(directives=[answer, *_pull_back(state, ctx)], quick_replies=[]))
+            return _stop(
+                state, StepResult(directives=[answer, *_pull_back(state, ctx)], quick_replies=[])
+            )
         extra.append(answer)
     elif ex.scope == "small_talk":
         extra.append(Directive(kind="small_talk"))
@@ -100,9 +116,9 @@ def apply_global_guards(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> 
     return GuardDecision(stop=False, extra=extra + emotion, extra_replies=replies)
 
 
-def _handoff_reason(state: SessionState) -> HandoffReason:
-    if state.handoff_offer_reason is not None:
-        return state.handoff_offer_reason
+def _handoff_reason(state: SessionState, offer_reason: HandoffReason | None) -> HandoffReason:
+    if offer_reason is not None:
+        return offer_reason
     if state.sub_state in _SUB_STATE_REASONS:
         return _SUB_STATE_REASONS[state.sub_state]
     if (

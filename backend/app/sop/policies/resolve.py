@@ -46,7 +46,7 @@ def handle_resolve(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepR
     outcome = resolve_case(claims, hints)
 
     if outcome.kind == "unique" and outcome.case is not None:
-        return _selected(state, outcome.case, from_memory)
+        return _selected(state, outcome.case, hints, from_memory, ctx.turn)
     if outcome.kind == "ambiguous":
         return _choose(state, "choose_case", outcome.candidates)
     if outcome.kind == "no_hints":
@@ -81,12 +81,18 @@ def _to_int(value: str | None) -> int | None:
         return None
 
 
-def _selected(state: SessionState, case: Claim, from_memory: bool) -> StepResult:
+def _selected(
+    state: SessionState, case: Claim, hints: CaseHintsInput, from_memory: bool, turn: int
+) -> StepResult:
     state.active_case_id = case.case_id
+    state.case_selected_turn = turn
     if case.case_id not in state.discussed_case_ids:
         state.discussed_case_ids.append(case.case_id)
-    if from_memory:
-        for key in _HINT_SLOTS:
+    # Mark the memory slots the selection used: all remembered hints, or the slots
+    # holding this turn's hints (memory stores every turn's hints before policy runs).
+    for key in _HINT_SLOTS:
+        value = getattr(hints, key)
+        if from_memory or (value is not None and str(value) == state.memory.get(key)):
             state.memory.mark_used(key, Phase.RESOLVE_INTENT)
     if state.primary_intent is None:
         state.primary_intent = "denial_question" if case.status == "denied" else "status_inquiry"

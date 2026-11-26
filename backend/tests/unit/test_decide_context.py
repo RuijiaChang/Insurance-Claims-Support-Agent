@@ -99,10 +99,10 @@ def test_margaret_opener_three_hops(repo: FixtureRepo, sop: SopConfig) -> None:
 
 def test_hop_limit_respected(repo: FixtureRepo, sop: SopConfig) -> None:
     state = SessionState.new("s1")
-    plan, _ = _turn(state, repo, _sop_with_hops(sop, 2), ex(**MARGARET_OPENER))
+    plan, _ = _turn(state, repo, _sop_with_hops(sop, 1), ex(**MARGARET_OPENER))
 
-    # Two handler calls: VERIFY_ID moved to RESOLVE_INTENT, RESOLVE_INTENT to PROCESS_CASE;
-    # the PROCESS_CASE handler is not run, so the question is not answered this turn.
+    # One hop: VERIFY_ID -> RESOLVE_INTENT, whose handler still runs and selects the case
+    # (its transition is applied), but the PROCESS_CASE handler is not reached this turn.
     assert plan.hops == [Phase.VERIFY_ID, Phase.RESOLVE_INTENT, Phase.PROCESS_CASE]
     assert "answer_question" not in _kinds(plan)
     assert state.phase == Phase.PROCESS_CASE
@@ -134,13 +134,16 @@ def test_hop_limit_caps_handler_calls(
     state = _verified(Phase.PROCESS_CASE, SubState.ACTIVE, "CL-2048")
     plan, _ = _turn(state, repo, sop, ex())
 
-    assert len(calls) == sop.process.max_hops == 3
-    assert len(plan.directives) == 3
+    # max_hops = 3 hops means 4 handler calls; the last one's transition is not followed.
+    assert sop.process.max_hops == 3
+    assert len(calls) == sop.process.max_hops + 1
+    assert len(plan.directives) == 4
     assert plan.hops == [
         Phase.PROCESS_CASE,
         Phase.RESOLVE_INTENT,
         Phase.PROCESS_CASE,
         Phase.RESOLVE_INTENT,
+        Phase.PROCESS_CASE,
     ]
 
 

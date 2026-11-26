@@ -4,8 +4,12 @@
 (invariant I1): guards and phase handlers only *return* a transition, and the
 LLM never changes phase. One user message may satisfy several phases at once
 (e.g. full identity plus a case hint), so after a transition the new phase's
-handler runs on the same extraction, up to ``sop.process.max_hops`` handler
-calls per turn.
+handler runs on the same extraction. A *hop* is one such continuation into a
+new phase; ``sop.process.max_hops`` caps them per turn (spec §7 "at most 3
+hops"), so a turn runs at most ``max_hops + 1`` handlers and the phase reached by
+the last hop still gets its handler. A guard's continued transition is a hop too.
+The final handler's own transition is still applied (its side effects, such as
+granting access or selecting a case, are already done) but is not followed.
 
 ``Engine`` runs one whole turn around ``decide``: extraction (LLM reconciled with
 regex, regex alone if the LLM fails), memory, policy, context, responder and
@@ -85,7 +89,9 @@ def decide(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> TurnPlan:
     else:
         directives = list(guard.extra)
 
-    for _ in range(ctx.sop.process.max_hops):
+    # max_hops hops = max_hops + 1 handler calls; a guard's hop comes out of the budget.
+    budget = ctx.sop.process.max_hops + 1 - (len(hops) - 1)
+    for _ in range(budget):
         if state.phase in _TERMINAL:
             break
         step = HANDLERS[state.phase](state, ex, ctx)

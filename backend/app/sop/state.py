@@ -166,6 +166,9 @@ class SessionState(BaseModel):
     consent: ConsentState = Field(default_factory=ConsentState)
     memory: Memory = Field(default_factory=Memory)
     active_case_id: str | None = None
+    # Turn on which RESOLVE_INTENT last selected the active case. The same turn's
+    # extraction (e.g. its select_case act) must not send PROCESS_CASE back to RESOLVE.
+    case_selected_turn: int | None = None
     discussed_case_ids: list[str] = Field(default_factory=list)
     primary_intent: Intent | None = None
     turn_intent: Intent | None = None
