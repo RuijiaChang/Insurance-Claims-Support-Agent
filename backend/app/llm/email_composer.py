@@ -32,8 +32,9 @@ class LLMEmailComposer:
         if not lines:
             return draft
         case_log = [e.model_dump(mode="json") for e in state.case_log]
-        caller = [m.text for m in state.transcript if m.role == "user"]
-        payload = {"discussed_lines": lines, "case_log": case_log, "caller_messages": caller}
+        # Caller text is deliberately left out: a company-sent email may only state facts
+        # from the draft and case log, never amounts or dates the caller made up.
+        payload = {"discussed_lines": lines, "case_log": case_log}
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": load_prompt("email")},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
@@ -54,7 +55,7 @@ class LLMEmailComposer:
             user_text="",
             history=[],
             tool_executor=None,
-            whitelist_text=json.dumps(facts) + "\n" + "\n".join(caller),
+            whitelist_text=json.dumps(facts),
         )
         if not check_reply(text, state, rctx, self.repo).ok:
             return draft

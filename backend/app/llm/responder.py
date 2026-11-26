@@ -43,6 +43,11 @@ def context_message(facts: dict[str, Any], directives: list[Directive]) -> str:
     return "\n".join(lines)
 
 
+def directives_reminder(directives: list[Directive]) -> str:
+    kinds = ", ".join(f"{i}. {d.kind}" for i, d in enumerate(directives, start=1))
+    return f"Current DIRECTIVES, in order: {kinds or '(none)'}."
+
+
 def _history(history: list[Message], user_text: str) -> list[dict[str, Any]]:
     turns = [m for m in history if m.role in _ROLES]
     # The engine records the latest user message before building the context; it is
@@ -68,8 +73,9 @@ class LLMResponder:
     def respond(self, rctx: ResponderContext, feedback: list[str] | None = None) -> str:
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt(rctx.phase)},
-            {"role": "user", "content": context_message(rctx.facts, rctx.directives)},
+            {"role": "system", "content": context_message(rctx.facts, rctx.directives)},
             *_history(rctx.history, rctx.user_text),
+            {"role": "system", "content": directives_reminder(rctx.directives)},
         ]
         if rctx.user_text.strip():
             messages.append({"role": "user", "content": rctx.user_text})

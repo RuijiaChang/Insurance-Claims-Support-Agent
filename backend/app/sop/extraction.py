@@ -1,14 +1,21 @@
 """Per-turn extraction schema (filled by the LLM) and regex reconciliation."""
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.config import JsonDict
 
-from app.llm.regex_extractor import RegexHits
+from app.llm.regex_extractor import RegexHits, date_candidates, phone_candidates
 from app.tools.claims import CaseHintsInput
 from app.tools.guidance import GuidanceTopic, Intent
-from app.tools.identity import IdentityField, Relationship
+from app.tools.identity import (
+    IdentityField,
+    Relationship,
+    normalize_name,
+    normalize_phone,
+    parse_dob,
+)
 
 __all__ = [
     "CaseHints",
@@ -130,12 +137,52 @@ class Extraction(BaseModel):
 
     @classmethod
     def from_regex(cls, h: RegexHits) -> "Extraction":
-        return reconcile(None, h)
+        return reconcile(None, h, "")
 
 
-def reconcile(llm: Extraction | None, hits: RegexHits) -> Extraction:
-    """Regex hits override the LLM on format fields; inputs are never mutated."""
+def _has_token(text: str, value: str) -> bool:
+    return re.search(rf"(?<!\w){re.escape(value)}(?!\w)", text, re.IGNORECASE) is not None
+
+
+def _grounded(field: str, value: str, text: str) -> bool:
+    """Did the caller actually say this identity value in this message?"""
+    value = value.strip()
+    if not value:
+        return False
+    if field in ("id_last4", "policy_number"):
+        return _has_token(text, value)
+    if field == "email":
+        return value.casefold() in text.casefold()
+    if field == "phone":
+        phone = normalize_phone(value)
+        return phone is not None and any(
+            normalize_phone(c) == phone for c in phone_candidates(text)
+        )
+    if field == "dob":
+        wanted = set(parse_dob(value))
+        return bool(wanted) and any(wanted & set(parse_dob(c)) for c in date_candidates(text))
+    if field == "full_name":
+        said = set(normalize_name(text).split())
+        tokens = normalize_name(value).split()
+        return bool(tokens) and all(t in said for t in tokens)
+    return False
+
+
+_GROUNDED_IDENTITY = ("full_name", "dob", "phone", "email", "id_last4", "policy_number")
+
+
+def reconcile(llm: Extraction | None, hits: RegexHits, user_text: str) -> Extraction:
+    """Merge LLM extraction with regex hits; inputs are never mutated.
+
+    An LLM identity value the caller did not actually say in ``user_text`` is dropped,
+    so a model can never fill in (and so verify with) a detail the caller didn't give.
+    Regex hits come from the text itself and override the LLM on format fields.
+    """
     out = llm.model_copy(deep=True) if llm is not None else Extraction.empty()
+    for field in _GROUNDED_IDENTITY:
+        value = getattr(out.identity, field)
+        if value is not None and not _grounded(field, value, user_text):
+            setattr(out.identity, field, None)
     if hits.dob_raw:
         out.identity.dob = hits.dob_raw
     if hits.phone:

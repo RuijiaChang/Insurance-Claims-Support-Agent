@@ -28,16 +28,63 @@ def _margaret() -> Extraction:
 
 def test_reconcile_regex_overrides_format_fields() -> None:
     llm = Extraction(identity=IdentityFields(id_last4="1985", full_name="A B"))
-    out = reconcile(llm, RegexHits(id_last4="4472", case_id="CL-1"))
+    out = reconcile(llm, RegexHits(id_last4="4472", case_id="CL-1"), "A B, last four 4472, CL-1")
     assert out.identity.id_last4 == "4472"
     assert out.identity.full_name == "A B"
     assert out.case_hints.case_id == "CL-1"
     assert llm.identity.id_last4 == "1985"  # input not mutated
 
 
+def test_reconcile_drops_identity_values_the_caller_did_not_say() -> None:
+    text = "I'm Margaret Chen, calling about my denied claim"
+    llm = Extraction(
+        identity=IdentityFields(
+            full_name="Margaret Chen",
+            dob="1985-03-15",
+            id_last4="4472",
+            phone="+16505212836",
+            email="margaret@email.com",
+            policy_number="POL-9921",
+        )
+    )
+    out = reconcile(llm, RegexHits(), text)
+    assert out.identity == IdentityFields(full_name="Margaret Chen")
+    state = SessionState.new("s1")
+    apply_extraction(state, out, 1)
+    assert state.identity.provided_count() == 1
+
+
+def test_reconcile_keeps_grounded_identity_values() -> None:
+    text = (
+        "Margaret Chen here, born March 15, 1985, cell (650) 521-2836, "
+        "Margaret@Email.com, policy pol-9921, ssn ends 4472"
+    )
+    llm = Extraction(
+        identity=IdentityFields(
+            full_name="margaret chen",
+            dob="1985-03-15",  # the model normalized the natural-language date
+            phone="+16505212836",
+            email="margaret@email.com",
+            id_last4="4472",
+            policy_number="POL-9921",
+        )
+    )
+    out = reconcile(llm, RegexHits(), text)
+    assert out.identity == llm.identity
+
+
+def test_reconcile_drops_partial_or_altered_values() -> None:
+    text = "My name is Margaret, born 1985-03-16, last four 44721"
+    llm = Extraction(
+        identity=IdentityFields(full_name="Margaret Chen", dob="1985-03-15", id_last4="4472")
+    )
+    out = reconcile(llm, RegexHits(), text)
+    assert out.identity == IdentityFields()
+
+
 def test_reconcile_none_uses_regex() -> None:
     hits = RegexHits(dob_raw="3/15/85", phone="+16505212836", email="a@b.co", policy_number="POL-1")
-    out = reconcile(None, hits)
+    out = reconcile(None, hits, "")
     assert out == Extraction.from_regex(hits)
     assert out.identity.dob == "3/15/85"
     assert out.identity.phone == "+16505212836"

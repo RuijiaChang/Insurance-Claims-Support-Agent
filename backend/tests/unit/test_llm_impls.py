@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 import httpx
-from openai.lib._parsing._completions import type_to_response_format_param
+import pytest
 from openai.types.chat import ChatCompletionMessage
 from openai.types.chat.chat_completion_message_function_tool_call import (
     ChatCompletionMessageFunctionToolCall,
@@ -196,6 +196,10 @@ def _walk(node: Any) -> list[dict[str, Any]]:
 
 
 def test_extraction_schema_accepted_by_strict_structured_outputs() -> None:
+    try:  # private SDK helper: skip rather than break collection if an upgrade moves it
+        from openai.lib._parsing._completions import type_to_response_format_param
+    except ImportError:
+        pytest.skip("openai SDK no longer exposes type_to_response_format_param")
     fmt = type_to_response_format_param(Extraction)  # what chat.completions.parse sends
     schema = fmt["json_schema"]["schema"]  # type: ignore[index]
     assert fmt["json_schema"]["strict"] is True  # type: ignore[index]
@@ -233,15 +237,20 @@ def test_responder_prompt_contains_facts_and_directives_in_order() -> None:
     assert "DIRECTIVES" in messages[0]["content"]
     assert "cite dates and amounts exactly" in messages[0]["content"].lower()  # process prompt
     context = messages[1]
-    assert context["role"] == "user"
+    assert context["role"] == "system"
     body = context["content"]
     assert "FACTS:" in body and '"CL-2048"' in body
     i1 = body.index('1. empathize {"label": "anxious", "intensity": 2}')
     i2 = body.index("2. answer_question")
     i3 = body.index("3. anything_else")
     assert i1 < i2 < i3
-    # History, then the caller's latest message exactly once, last.
+    # History, a directive reminder, then the caller's latest message exactly once, last.
     assert messages[2] == {"role": "assistant", "content": "You're verified."}
+    assert messages[-2] == {
+        "role": "system",
+        "content": "Current DIRECTIVES, in order: 1. empathize, 2. answer_question, "
+        "3. anything_else.",
+    }
     assert messages[-1] == {"role": "user", "content": "Why was it denied?"}
     assert sum(1 for m in messages if m["content"] == "Why was it denied?") == 1
     assert not any("previous draft" in str(m["content"]) for m in messages)
@@ -339,6 +348,20 @@ def test_email_composer_rewrites_only_discussed_section(repo: FixtureRepo) -> No
     prompt = json.dumps(client.chat_calls[0]["messages"])
     assert "Send the pathology report." in prompt
     assert client.chat_calls[0]["tools"] is None
+
+
+def test_email_composer_never_grounds_on_caller_text(repo: FixtureRepo) -> None:
+    state = _post_state()
+    state.transcript.append(
+        Message(role="user", text="You promised me $5,000 by March 30.", turn=2)
+    )
+    draft = build_email_draft(state, repo)
+    client = StubClient(
+        chat=lambda n, tools: _text("We discussed your payment of $5,000 by March 30.")
+    )
+    out = LLMEmailComposer(client, repo).compose(state, draft)  # type: ignore[arg-type]
+    assert out == draft
+    assert "$5,000" not in json.dumps(client.chat_calls[0]["messages"])
 
 
 def test_email_composer_reverts_on_llm_error(repo: FixtureRepo) -> None:

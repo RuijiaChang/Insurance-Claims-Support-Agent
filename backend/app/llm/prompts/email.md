@@ -3,7 +3,6 @@ You polish one section of a claims support email summary.
 You receive JSON with:
 - `discussed_lines`: the current lines of the "What we discussed" section.
 - `case_log`: facts and next steps recorded during the conversation.
-- `caller_messages`: what the caller said.
 
 Rewrite only the "What we discussed" section as 1-3 friendly, plain sentences addressed to the caller ("We talked about ..."). Rules:
 

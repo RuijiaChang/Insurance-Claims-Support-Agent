@@ -36,6 +36,16 @@ class RegexHits:
     case_id: str | None = None
 
 
+def date_candidates(text: str) -> list[str]:
+    """Every date-shaped substring of the text, in any supported format."""
+    return [m.group(0) for pattern in _DOB_PATTERNS for m in pattern.finditer(text)]
+
+
+def phone_candidates(text: str) -> list[str]:
+    """Every phone-shaped substring of the text."""
+    return [m.group(0) for m in _PHONE.finditer(text)]
+
+
 def _find_dob(text: str) -> str | None:
     """Return the last DOB-shaped match by position, so later corrections win."""
     matches = [m for pattern in _DOB_PATTERNS for m in pattern.finditer(text)]

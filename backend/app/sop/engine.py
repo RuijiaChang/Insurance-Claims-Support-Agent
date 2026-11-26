@@ -212,7 +212,7 @@ class Engine:
                 last_agent_message=_last_agent_message(state),
             )
             try:
-                ex = reconcile(llm.extractor.extract(user_text, ectx), hits)
+                ex = reconcile(llm.extractor.extract(user_text, ectx), hits, user_text)
                 source = "llm+regex"
             except LLMError as err:
                 ex = Extraction.from_regex(hits)
