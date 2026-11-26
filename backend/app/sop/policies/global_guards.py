@@ -14,7 +14,8 @@ so a mixed message is never declined.
 Handoff offers only live for one turn: ``handoff_offer_reason`` is read and
 cleared at the start of every turn (an offer made this turn sets it again), and
 ``counters.l3_offered`` is cleared once the turn after the offer is over, so an
-ignored offer never colours a later handoff ticket or a later "no".
+ignored offer never colours a later handoff ticket or a later "no". System
+events (consent polls) are not user turns: they leave both untouched.
 
 Guards never change phase themselves: any change is returned through
 ``GuardDecision.step.transition``.
@@ -51,9 +52,10 @@ class GuardDecision:
     extra_replies: list[QuickReply] = field(default_factory=list)
 
 
-def _stop(state: SessionState, step: StepResult) -> GuardDecision:
+def _stop(state: SessionState, step: StepResult, ctx: PolicyCtx | None = None) -> GuardDecision:
     # The emotion step, which consumes last turn's L3 offer, does not run this turn.
-    state.counters.l3_offered.clear()
+    if ctx is None or ctx.event is None:
+        state.counters.l3_offered.clear()
     return GuardDecision(stop=True, step=step)
 
 
@@ -68,9 +70,11 @@ def apply_global_guards(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> 
             ),
         )
 
-    # A handoff offer made last turn may be accepted now; otherwise it lapses.
+    # A handoff offer made last user turn may be accepted now; otherwise it lapses.
+    # A system event (consent poll) is not the user's answer, so it keeps the offer.
     offer_reason = state.handoff_offer_reason
-    state.handoff_offer_reason = None
+    if ctx.event is None:
+        state.handoff_offer_reason = None
 
     # 2. Actions and explicit human requests.
     if ctx.action == "end_session" and (
@@ -84,16 +88,17 @@ def apply_global_guards(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> 
                 quick_replies=[],
                 transition=(Phase.CLOSED, SubState.NONE),
             ),
+            ctx,
         )
     if ctx.action == "handoff_accept" or "request_human" in ex.acts:
         reason = _handoff_reason(state, offer_reason)
         state.pending_question = None
-        return _stop(state, start_handoff(state, reason, ctx))
+        return _stop(state, start_handoff(state, reason, ctx), ctx)
 
     # 3. Scope. A turn carrying identity or case data is in scope whatever its label.
     has_claim_data = _has_claim_data(ex)
     if ex.scope == "out_of_scope" and not has_claim_data:
-        return _stop(state, _decline_off_topic(state, ctx))
+        return _stop(state, _decline_off_topic(state, ctx), ctx)
 
     # 4. Not off-topic: the consecutive run is broken.
     state.counters.off_topic_consecutive = 0
@@ -105,14 +110,18 @@ def apply_global_guards(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> 
         )
         if not has_claim_data:
             return _stop(
-                state, StepResult(directives=[answer, *_pull_back(state, ctx)], quick_replies=[])
+                state,
+                StepResult(directives=[answer, *_pull_back(state, ctx)], quick_replies=[]),
+                ctx,
             )
         extra.append(answer)
     elif ex.scope == "small_talk":
         extra.append(Directive(kind="small_talk"))
 
     # 5. Emotion.
-    emotion, replies = emotion_directives(state, ex, gate_for(state), ctx.sop.emotion)
+    emotion, replies = emotion_directives(
+        state, ex, gate_for(state), ctx.sop.emotion, system_event=ctx.event is not None
+    )
     return GuardDecision(stop=False, extra=extra + emotion, extra_replies=replies)
 
 

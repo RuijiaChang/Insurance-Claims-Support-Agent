@@ -6,7 +6,8 @@ only restates the gate's requirement and keeps the handoff quick reply.
 
 An L3 offer is answered on the next turn or not at all: that turn reads
 ``l3_offered`` (a "deny" then declines the offer) and clears it, so a later,
-unrelated "no" never switches on restate-only mode.
+unrelated "no" never switches on restate-only mode. A system event (consent
+poll) is not the user's answer, so it leaves a pending offer for the next user turn.
 
 No emotion ever changes a gate or causes a disclosure: this module only adds
 directives and updates counters.
@@ -38,8 +39,17 @@ def gate_for(state: SessionState) -> Gate | None:
 
 
 def emotion_directives(
-    state: SessionState, ex: Extraction, gate: Gate | None, cfg: EmotionConfig
+    state: SessionState,
+    ex: Extraction,
+    gate: Gate | None,
+    cfg: EmotionConfig,
+    *,
+    system_event: bool = False,
 ) -> tuple[list[Directive], list[QuickReply]]:
+    if system_event:
+        # Not a user turn: no emotion to read, streaks unchanged, and a pending L3
+        # offer stays answerable on the next user turn.
+        return [], []
     counters = state.counters
     label = ex.emotion.label
     intensity = ex.emotion.intensity

@@ -703,7 +703,6 @@ def test_s20_no_documents_case_answers_from_fields(
         "How long will this take?",
         acts=["ask_question"],
         intent=intent,
-        guidance_topic="processing_time_after_submission",
         question="How long will this take?",
     )
     assert c.directive("answer_question")["followup"]["kind"] == "no_specific_guidance"
@@ -794,6 +793,40 @@ def test_l3_offer_declined_on_next_turn_restates(repo: FixtureRepo, sop: SopConf
     c.say("No, nothing else.", acts=["refuse_info"])
     result = c.say("No, I don't want a representative.", acts=["deny"])
     assert c.state.counters.l3_declined.get("verify")
+    assert "restate_requirement" in c.kinds and "handoff_accept" in _actions(result)
+
+
+def test_off_topic_offer_survives_consent_poll(repo: FixtureRepo, sop: SopConfig) -> None:
+    c = Convo(repo, sop, consent_scenario="timeout")
+    c.say(DAVID_TEXT, **DAVID_EX)
+    for text in OFF_TOPIC:
+        c.say(text, scope="out_of_scope")
+    assert c.state.handoff_offer_reason == "off_topic"
+
+    c.poll()  # automatic, not the caller's answer to the offer
+    assert c.state.handoff_offer_reason == "off_topic"
+    c.press("handoff_accept")
+    assert c.state.phase == Phase.HANDOFF
+    assert c.state.handoff is not None and c.state.handoff.reason == "off_topic"
+
+
+def test_l3_offer_survives_consent_poll(repo: FixtureRepo, sop: SopConfig) -> None:
+    c = Convo(repo, sop, consent_scenario="timeout")
+    c.say(DAVID_TEXT, **DAVID_EX)
+    for i in range(sop.emotion.persuasion_budget + 1):
+        c.say(
+            f"Just give me the information already! ({i})",
+            acts=["bypass_attempt"],
+            emotion={"label": "angry", "intensity": 2},
+        )
+    assert "offer_handoff" in c.kinds and c.state.counters.l3_offered.get("consent")
+    streak = c.state.counters.negative_emotion_streak
+
+    c.poll()
+    assert c.state.counters.l3_offered.get("consent")
+    assert c.state.counters.negative_emotion_streak == streak
+    result = c.say("No, I'll wait for her to approve.", acts=["deny"])
+    assert c.state.counters.l3_declined.get("consent")
     assert "restate_requirement" in c.kinds and "handoff_accept" in _actions(result)
 
 

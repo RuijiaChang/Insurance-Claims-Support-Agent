@@ -60,10 +60,10 @@ def handle_process(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> StepR
         alternatives = document_alternatives(
             ctx.repo, case, None, ctx.sop.process.doc_fuzzy_threshold
         )
-        return _answer(state, ctx, case, question, followup, alternatives, None)
+        return _answer(state, ctx, case, question, followup, alternatives)
 
     followup = match_followup(ctx.repo, case, question, state.turn_intent, ex.guidance_topic)
-    return _answer(state, ctx, case, question, followup, None, ex.guidance_topic)
+    return _answer(state, ctx, case, question, followup, None)
 
 
 def _active_case(state: SessionState, ctx: PolicyCtx) -> Claim | None:
@@ -121,7 +121,6 @@ def _answer(
     question: str,
     followup: FollowupResult,
     alternatives: dict[str, str] | None,
-    asked_topic: GuidanceTopic | None,
 ) -> StepResult:
     data: dict[str, object] = {
         "question": question,
@@ -139,9 +138,9 @@ def _answer(
         )
         offer_handoff = True
     # The record itself answers status/payment/denial questions; anything else, or a
-    # guidance-type question (a topic was asked) that has no guidance here, gets no_data.
+    # guidance-type question (e.g. timing) with no guidance for this case, gets no_data.
     if followup.kind == "no_specific_guidance" and (
-        state.turn_intent not in _CASE_FIELD_INTENTS or asked_topic is not None
+        state.turn_intent not in _CASE_FIELD_INTENTS or followup.asked_guidance
     ):
         directives.append(Directive(kind="no_data"))
         offer_handoff = True

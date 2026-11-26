@@ -108,6 +108,9 @@ class FollowupResult:
     kind: Literal["matched", "fallback", "no_specific_guidance"]
     topic: GuidanceTopic | None
     text: str | None
+    # no_specific_guidance only: the question was a guidance-type question (a keyword
+    # or the LLM topic hit an entry) whose entries all need documents this case lacks.
+    asked_guidance: bool = False
 
 
 def _longest_hit(question: str, phrases: list[str]) -> int:
@@ -163,7 +166,11 @@ def match_followup(
         return FollowupResult("matched", best["topic"], _render(repo, claim, best))
     if claim.documents_needed:
         return FollowupResult("fallback", None, _en(repo.guideline["claim_followup_fallback"]))
-    return FollowupResult("no_specific_guidance", None, None)
+    entries = repo.guideline["claim_followup_guidance"]
+    asked = topic is not None or any(
+        _longest_hit(q, [p.lower() for p in e.get("match_any", [])]) for e in entries
+    )
+    return FollowupResult("no_specific_guidance", None, None, asked_guidance=asked)
 
 
 @dataclass

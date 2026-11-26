@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 
 import pytest
 
@@ -107,6 +108,28 @@ def test_no_documents_case_gets_no_specific_guidance(repo: FixtureRepo, c02: Cla
     r = match_followup(repo, c02, "how long will this take", None, None)
     assert r.kind == "no_specific_guidance"
     assert r.text is None
+
+
+@pytest.mark.parametrize(
+    ("question", "topic", "asked"),
+    [
+        ("how long will this take", None, True),  # keyword of a documents-only entry
+        ("I can't find it", "missing_required_material_alternatives", True),  # LLM topic
+        ("what's the status?", None, False),
+        ("how long ago was it denied", None, False),  # "how long" + "ago" is excluded
+    ],
+)
+def test_no_specific_guidance_flags_guidance_questions(
+    repo: FixtureRepo, c02: Claim, question: str, topic: Any, asked: bool
+) -> None:
+    r = match_followup(repo, c02, question, None, topic)
+    assert r.kind == "no_specific_guidance"
+    assert r.asked_guidance is asked
+
+
+def test_matched_and_fallback_never_flag_asked_guidance(repo: FixtureRepo, c48: Claim) -> None:
+    assert match_followup(repo, c48, "how long will this take", None, None).asked_guidance is False
+    assert match_followup(repo, c48, "hello there", None, None).asked_guidance is False
 
 
 def test_fallback_text_exact(repo: FixtureRepo, c48: Claim) -> None:

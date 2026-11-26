@@ -4,12 +4,13 @@
 (invariant I1): guards and phase handlers only *return* a transition, and the
 LLM never changes phase. One user message may satisfy several phases at once
 (e.g. full identity plus a case hint), so after a transition the new phase's
-handler runs on the same extraction. A *hop* is one such continuation into a
-new phase; ``sop.process.max_hops`` caps them per turn (spec §7 "at most 3
-hops"), so a turn runs at most ``max_hops + 1`` handlers and the phase reached by
-the last hop still gets its handler. A guard's continued transition is a hop too.
-The final handler's own transition is still applied (its side effects, such as
-granting access or selecting a case, are already done) but is not followed.
+handler runs on the same extraction. A *hop* is one such followed transition;
+``sop.process.max_hops`` caps them per turn (spec §7 "at most 3 hops"), and a
+guard's continued transition counts as one. So a turn runs at most
+``max_hops + 1`` handlers and the phase reached by the last hop still gets its
+handler. That last handler's own transition is still applied (its side effects,
+such as granting access or selecting a case, are already done) but never
+followed, so a turn can change phase at most ``max_hops + 1`` times.
 
 ``Engine`` runs one whole turn around ``decide``: extraction (LLM reconciled with
 regex, regex alone if the LLM fails), memory, policy, context, responder and
