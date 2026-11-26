@@ -170,6 +170,8 @@ class SessionState(BaseModel):
     primary_intent: Intent | None = None
     turn_intent: Intent | None = None
     pending_handoff: HandoffReason | None = None
+    # Why the most recent handoff offer made by a global guard was made (off_topic, emotion).
+    handoff_offer_reason: HandoffReason | None = None
     case_log: list[CaseLogEntry] = Field(default_factory=list)
     counters: Counters = Field(default_factory=Counters)
     pending_question: PendingQuestion | None = None
