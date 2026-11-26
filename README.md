@@ -4,7 +4,9 @@
 
 This insurance claims support agent follows a fixed four-phase SOP (`VERIFY_ID → RESOLVE_INTENT → PROCESS_CASE → POST_PROCESS`) and still converses naturally. **The SOP lives in code, not in the prompt.** A deterministic policy engine decides the phase, who may see what, and which facts are true. The LLM does only two jobs: it turns messy caller text into structured fields, and it phrases the reply.
 
-**Live demo: <https://sop-insurance-agent.onrender.com>.** No key is needed because a capped demo key is built in. Pick a scenario in the top bar and press **Send**. The demo runs on a free instance, so the first load after a quiet period can take up to a minute while it wakes up.
+**Live demo: <https://sop-insurance-agent.onrender.com>** · **Source: <https://github.com/RuijiaChang/Insurance-Claims-Support-Agent>**
+
+No key is needed because a capped demo key is built in. Pick a scenario in the top bar and press **Send**. The demo runs on a free instance, so the first load after a quiet period can take up to a minute while it wakes up.
 
 ![One message: three identity fields verified, the January denied claim the caller mentioned is remembered across phases, resolved to CL-2048, and answered from the record. The Inspector on the right shows the SOP state.](docs/images/hero-verified-in-one-turn.png)
 
