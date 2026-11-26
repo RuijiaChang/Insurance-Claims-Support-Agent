@@ -60,3 +60,21 @@ def test_nothing_found() -> None:
     hits = extract_regex("hello there")
     assert hits == extract_regex("")
     assert hits.dob_raw is None and hits.phone is None and hits.email is None
+
+
+def test_last4_ignores_years_and_date_digits() -> None:
+    for s in (
+        "my id: born March 15, 1985",
+        "my ID, DOB 15 March 1985",
+        "ID 03/15/1985 ok",
+        "my id is the one I gave, 2024 claim",
+    ):
+        assert extract_regex(s).id_last4 is None, s
+
+
+def test_last4_year_like_allowed_after_strong_keyword() -> None:
+    assert extract_regex("ssn last four is 1985").id_last4 == "1985"
+
+
+def test_dob_last_match_wins_for_corrections() -> None:
+    assert extract_regex("DOB 1985-03-16, sorry, 1985-03-15").dob_raw == "1985-03-15"

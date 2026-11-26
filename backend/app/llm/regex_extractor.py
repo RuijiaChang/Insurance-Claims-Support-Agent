@@ -18,6 +18,8 @@ _DOB_PATTERNS = [
 _PHONE = re.compile(r"(?<![\w-])(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}(?![\w-])")
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _LAST4_KEYWORD = re.compile(r"last\s+four|last\s+4|ssn|social|national\s+id|\bid\b", re.IGNORECASE)
+_YEAR_LIKE = re.compile(r"(?:19|20)\d\d$")
+_KEYWORD_FILLER = re.compile(r"[\s:=#,-]*(?:(?:is|are|digits|last|four|4|number|of)\b[\s:=#,-]*)*")
 _LAST4_WINDOW = 30
 _LAST4_DIGITS = re.compile(r"(?<![\w-])\d{4}(?![\w]|-\d)")
 _POLICY = re.compile(r"\bPOL-\d+\b", re.IGNORECASE)
@@ -35,11 +37,9 @@ class RegexHits:
 
 
 def _find_dob(text: str) -> str | None:
-    for pattern in _DOB_PATTERNS:
-        m = pattern.search(text)
-        if m:
-            return m.group(0)
-    return None
+    """Return the last DOB-shaped match by position, so later corrections win."""
+    matches = [m for pattern in _DOB_PATTERNS for m in pattern.finditer(text)]
+    return max(matches, key=lambda m: m.start()).group(0) if matches else None
 
 
 def _find_phone(text: str) -> str | None:
@@ -50,12 +50,27 @@ def _find_phone(text: str) -> str | None:
     return None
 
 
+def _mask_non_last4_spans(text: str) -> str:
+    """Blank out dates, phone numbers and policy/case ids so their digits are never last4."""
+    chars = list(text)
+    for pattern in [*_DOB_PATTERNS, _PHONE, _POLICY, _CASE]:
+        for m in pattern.finditer(text):
+            chars[m.start() : m.end()] = " " * (m.end() - m.start())
+    return "".join(chars)
+
+
 def _find_last4(text: str) -> str | None:
-    for kw in _LAST4_KEYWORD.finditer(text):
-        window = text[kw.end() : kw.end() + _LAST4_WINDOW]
-        m = _LAST4_DIGITS.search(window)
-        if m:
-            return m.group(0)
+    masked = _mask_non_last4_spans(text)
+    for kw in _LAST4_KEYWORD.finditer(masked):
+        strong = kw.group(0).lower() != "id"
+        start = kw.end()
+        for m in _LAST4_DIGITS.finditer(masked, start, start + _LAST4_WINDOW):
+            digits = m.group(0)
+            if _YEAR_LIKE.match(digits) and not (
+                strong and _KEYWORD_FILLER.fullmatch(masked[start : m.start()])
+            ):
+                continue
+            return digits
     return None
 
 
