@@ -7,13 +7,25 @@ import {
   deleteSession,
   getConfig,
   loadSettings,
+  sendEvent,
   sendMessage,
 } from "./api";
 import Chat from "./components/Chat";
+import Inspector from "./components/Inspector";
 import KeyDialog from "./components/KeyDialog";
+import ScenarioPicker from "./components/ScenarioPicker";
 import TopBar from "./components/TopBar";
 import { initialState, reducer, toChatMessages, MSG_GENERIC, type FailReason } from "./reducer";
-import type { AppConfig, QuickReply } from "./types";
+import { suggestionsFor, type Scenario } from "./scenarios";
+import type { AppConfig, ConsentScenario, TurnOut } from "./types";
+
+const CONSENT_POLL_MS = 4000;
+
+function failure(error: unknown): FailReason {
+  if (error instanceof MissingKey) return "missing_key";
+  if (error instanceof QuotaExceeded) return "quota_exceeded";
+  return "other";
+}
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -21,12 +33,19 @@ export default function App() {
   const [userSettings, setUserSettings] = useState(loadSettings);
   const [bootError, setBootError] = useState(false);
   const [showInspector, setShowInspector] = useState(false);
+  const [scenario, setScenario] = useState<Scenario>();
+  const [consent, setConsent] = useState<ConsentScenario>("default");
+  const [draft, setDraft] = useState("");
   const booted = useRef(false);
   const sessionRef = useRef<string | null>(null);
-  sessionRef.current = state.sessionId;
+  // A ref guards requests within the same render as well as across renders.
+  const busy = useRef(false);
+  const inspectorButton = useRef<HTMLButtonElement>(null);
+  const closeInspectorButton = useRef<HTMLButtonElement>(null);
 
-  const startSession = useCallback(async (notice?: string) => {
-    const s = await createSession("default");
+  const startSession = useCallback(async (mode: ConsentScenario, notice?: string) => {
+    const s = await createSession(mode);
+    sessionRef.current = s.session_id;
     dispatch({
       type: "session_started",
       sessionId: s.session_id,
@@ -38,14 +57,18 @@ export default function App() {
   }, []);
 
   const boot = useCallback(async () => {
+    if (busy.current) return;
+    busy.current = true;
     setBootError(false);
     try {
       const cfg = await getConfig();
       setConfig(cfg);
       if (!cfg.has_server_key && !loadSettings()) dispatch({ type: "open_key_dialog" });
-      await startSession();
+      await startSession("default");
     } catch {
       setBootError(true);
+    } finally {
+      busy.current = false;
     }
   }, [startSession]);
 
@@ -55,43 +78,75 @@ export default function App() {
     void boot();
   }, [boot]);
 
-  const failure = (e: unknown): FailReason =>
-    e instanceof MissingKey ? "missing_key" : e instanceof QuotaExceeded ? "quota_exceeded" : "other";
-
-  const send = useCallback(
-    async (body: { text?: string; action?: string }, userText?: string) => {
+  const runTurn = useCallback(
+    async (request: (id: string) => Promise<TurnOut>, userText?: string) => {
       const id = sessionRef.current;
-      if (!id) return;
+      if (!id || busy.current) return;
+      busy.current = true;
       dispatch({ type: "turn_started", userText });
       try {
-        dispatch({ type: "turn_succeeded", turn: await sendMessage(id, body) });
-      } catch (e) {
-        if (e instanceof SessionExpired) {
+        dispatch({ type: "turn_succeeded", turn: await request(id) });
+      } catch (error) {
+        if (error instanceof SessionExpired) {
           try {
-            await startSession("Session expired — started a new one.");
+            await startSession(consent, "Session expired — started a new one.");
           } catch {
             dispatch({ type: "turn_failed", reason: "other" });
           }
         } else {
-          dispatch({ type: "turn_failed", reason: failure(e) });
+          dispatch({ type: "turn_failed", reason: failure(error) });
         }
+      } finally {
+        busy.current = false;
       }
     },
-    [startSession],
+    [consent, startSession],
   );
 
-  const reset = async () => {
-    const id = sessionRef.current;
-    if (id) await deleteSession(id).catch(() => undefined);
+  const consentPending = state.snapshot?.sub_state === "CONSENT_PENDING";
+  useEffect(() => {
+    if (!state.sessionId || !consentPending || state.pending) return;
+    const timer = window.setTimeout(() => {
+      void runTurn((id) => sendEvent(id, "consent_poll"));
+    }, CONSENT_POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [state.sessionId, state.snapshot, state.messages, state.pending, consentPending, runTurn]);
+
+  const replaceSession = async (mode: ConsentScenario, preset?: Scenario) => {
+    const previous = sessionRef.current;
+    if (!previous || busy.current) return;
+    busy.current = true;
+    dispatch({ type: "turn_started" });
     try {
-      await startSession();
+      await startSession(mode);
+      setConsent(mode);
+      setScenario(preset);
+      setDraft(preset?.opener ?? "");
+      if (previous !== sessionRef.current) void deleteSession(previous).catch(() => undefined);
     } catch {
       dispatch({ type: "turn_failed", reason: "other" });
+    } finally {
+      busy.current = false;
     }
   };
 
-  // Why the dialog opened (quota / missing key / rejected key); generic errors stay inline only.
+  const closeInspector = useCallback(() => {
+    setShowInspector(false);
+    inspectorButton.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!showInspector) return;
+    closeInspectorButton.current?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeInspector();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showInspector, closeInspector]);
+
   const keyNotice = state.error === MSG_GENERIC ? undefined : state.error;
+  const ready = state.sessionId !== null;
 
   if (bootError) {
     return (
@@ -119,39 +174,69 @@ export default function App() {
         config={config}
         userSettings={userSettings}
         onOpenKeyDialog={() => dispatch({ type: "open_key_dialog" })}
-        onReset={() => void reset()}
-        disabled={state.pending}
-      />
+        onReset={() => void replaceSession(consent, scenario)}
+        disabled={state.pending || !ready}
+      >
+        <ScenarioPicker
+          scenarioId={scenario?.id ?? ""}
+          consent={consent}
+          disabled={state.pending || !ready}
+          onScenario={(preset) => void replaceSession(preset?.consent ?? "default", preset)}
+          onConsent={(mode) => void replaceSession(mode, scenario?.consent === mode ? scenario : undefined)}
+        />
+      </TopBar>
       <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="flex min-h-0 flex-col border-slate-200 lg:border-r">
+        <div className="flex min-h-0 min-w-0 flex-col border-slate-200 lg:border-r">
           <div className="border-b border-slate-200 bg-white px-4 py-2 lg:hidden">
             <button
               type="button"
+              ref={inspectorButton}
               aria-expanded={showInspector}
-              onClick={() => setShowInspector((v) => !v)}
+              aria-controls="inspector"
+              onClick={() => setShowInspector(true)}
               className="text-sm text-slate-600 underline underline-offset-2"
             >
-              {showInspector ? "Hide inspector" : "Show inspector"}
+              Show inspector
             </button>
           </div>
-          {showInspector ? (
-            <div className="p-4 lg:hidden">
-              <InspectorPlaceholder />
-            </div>
-          ) : null}
-          <div className={`${showInspector ? "hidden lg:flex" : "flex"} min-h-0 flex-1 flex-col`}>
-            <Chat
-              messages={state.messages}
-              quickReplies={state.quickReplies}
-              pending={state.pending}
-              ready={state.sessionId !== null}
-              onSend={(text) => void send({ text }, text)}
-              onQuickReply={(r: QuickReply) => void send({ action: r.action }, r.label)}
-            />
-          </div>
+          <Chat
+            messages={state.messages}
+            quickReplies={state.quickReplies}
+            pending={state.pending}
+            ready={ready}
+            draft={draft}
+            suggestions={suggestionsFor(scenario?.id ?? "", state.snapshot?.phase ?? "")}
+            onDraft={setDraft}
+            onSend={(text) => void runTurn((id) => sendMessage(id, { text }), text)}
+            onQuickReply={(reply) => void runTurn((id) => sendMessage(id, { action: reply.action }), reply.label)}
+          />
         </div>
-        <aside className="hidden overflow-y-auto bg-slate-50 p-4 lg:block" aria-label="Inspector">
-          <InspectorPlaceholder />
+        {showInspector && (
+          <button
+            type="button"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={closeInspector}
+            className="fixed inset-0 z-10 bg-slate-950/40 lg:hidden"
+          />
+        )}
+        <aside
+          id="inspector"
+          className={`${showInspector ? "fixed inset-y-0 right-0 z-20 w-full max-w-[400px] shadow-xl" : "hidden"} overflow-y-auto bg-slate-50 p-4 lg:static lg:block lg:w-auto lg:max-w-none lg:shadow-none`}
+          aria-label="Inspector"
+        >
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="font-semibold text-slate-900">Inspector</h2>
+            <button
+              type="button"
+              ref={closeInspectorButton}
+              onClick={closeInspector}
+              className="rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 lg:hidden"
+            >
+              Close inspector
+            </button>
+          </div>
+          <Inspector sessionId={state.sessionId} snapshot={state.snapshot} />
         </aside>
       </main>
       <KeyDialog
@@ -160,15 +245,6 @@ export default function App() {
         onClose={() => dispatch({ type: "close_key_dialog" })}
         onChanged={() => setUserSettings(loadSettings())}
       />
-    </div>
-  );
-}
-
-function InspectorPlaceholder() {
-  return (
-    <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center">
-      <h2 className="text-sm font-semibold text-slate-700">Inspector</h2>
-      <p className="mt-1 text-xs text-slate-500">State, memory and timeline will appear here.</p>
     </div>
   );
 }

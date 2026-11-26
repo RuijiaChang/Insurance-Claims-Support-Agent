@@ -30,6 +30,21 @@ export interface TimelineEvent {
   summary: string;
 }
 
+export interface HandoffTicket {
+  ticket_id: string;
+  reason: string;
+  verified: boolean;
+  stated_intent: string | null;
+  case_id: string | null;
+  created_turn: number;
+}
+
+export interface OutboxMessage {
+  message_id: string;
+  subject: string;
+  body: string;
+}
+
 export interface Snapshot {
   phase: string;
   sub_state: string;
@@ -45,7 +60,7 @@ export interface Snapshot {
   counters: Record<string, unknown>;
   consent: { status: string; polls: number; scenario: string };
   email: { decision: string | null; preview: unknown };
-  handoff: unknown;
+  handoff: HandoffTicket | null;
   events: TimelineEvent[];
 }
 

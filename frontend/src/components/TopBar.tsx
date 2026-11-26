@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { AppConfig, ModelSettings } from "../types";
 
 interface Props {
@@ -6,6 +7,7 @@ interface Props {
   onOpenKeyDialog: () => void;
   onReset: () => void;
   disabled: boolean;
+  children: ReactNode;
 }
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -14,7 +16,7 @@ const PROVIDER_LABEL: Record<string, string> = {
   custom: "Custom",
 };
 
-export default function TopBar({ config, userSettings, onOpenKeyDialog, onReset, disabled }: Props) {
+export default function TopBar({ config, userSettings, onOpenKeyDialog, onReset, disabled, children }: Props) {
   const linkCls = "underline underline-offset-2 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded";
   let keyStatus: JSX.Element;
   if (userSettings) {
@@ -48,6 +50,7 @@ export default function TopBar({ config, userSettings, onOpenKeyDialog, onReset,
           Demo date: {config.demo_today}
         </span>
       )}
+      {children}
       <div className="ml-auto flex items-center gap-4 text-sm text-slate-600">
         {keyStatus}
         <button

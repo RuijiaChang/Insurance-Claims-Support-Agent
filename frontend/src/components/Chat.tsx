@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { ChatMessage, QuickReply } from "../types";
 import QuickReplies from "./QuickReplies";
+import SuggestionChips from "./SuggestionChips";
 
 export const MAX_TEXT_LEN = 4000;
 
@@ -9,6 +10,9 @@ interface Props {
   quickReplies: QuickReply[];
   pending: boolean;
   ready: boolean;
+  draft: string;
+  suggestions: string[];
+  onDraft: (text: string) => void;
   onSend: (text: string) => void;
   onQuickReply: (reply: QuickReply) => void;
 }
@@ -34,8 +38,8 @@ function Bubble({ m }: { m: ChatMessage }) {
   );
 }
 
-export default function Chat({ messages, quickReplies, pending, ready, onSend, onQuickReply }: Props) {
-  const [draft, setDraft] = useState("");
+export default function Chat({ messages, quickReplies, pending, ready, draft, suggestions, onDraft, onSend, onQuickReply }: Props) {
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const tooLong = draft.length > MAX_TEXT_LEN;
   const canSend = ready && !pending && draft.trim().length > 0 && !tooLong;
@@ -47,11 +51,10 @@ export default function Chat({ messages, quickReplies, pending, ready, onSend, o
   const submit = () => {
     if (!canSend) return;
     onSend(draft.trim());
-    setDraft("");
+    onDraft("");
   };
 
-  // Quick replies belong under the last agent message only.
-  const lastIsAgent = messages.length > 0 && messages[messages.length - 1].role === "agent";
+  // Quick replies reflect the latest server state, including after a failed request.
 
   return (
     <section className="flex min-h-0 flex-1 flex-col" aria-label="Chat">
@@ -79,7 +82,7 @@ export default function Chat({ messages, quickReplies, pending, ready, onSend, o
             </span>
           </div>
         )}
-        {!pending && lastIsAgent && (
+        {!pending && ready && (
           <QuickReplies replies={quickReplies} disabled={pending} onPick={onQuickReply} />
         )}
         <div ref={endRef} />
@@ -91,20 +94,26 @@ export default function Chat({ messages, quickReplies, pending, ready, onSend, o
           submit();
         }}
       >
+        <SuggestionChips
+          suggestions={suggestions}
+          disabled={pending || !ready}
+          onPick={(text) => { onDraft(text); inputRef.current?.focus(); }}
+        />
         <div className="flex items-end gap-2">
           <textarea
+            ref={inputRef}
             aria-label="Message"
             value={draft}
             rows={2}
             placeholder="Type your message (Enter to send, Shift+Enter for a new line)"
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => onDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 submit();
               }
             }}
-            className="min-h-[44px] flex-1 resize-none rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            className="min-h-[44px] min-w-0 flex-1 resize-none rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
           />
           <button
             type="submit"

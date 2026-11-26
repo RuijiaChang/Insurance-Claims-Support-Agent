@@ -2,6 +2,7 @@ import type {
   AppConfig,
   ConsentScenario,
   ModelSettings,
+  OutboxMessage,
   SessionOut,
   TurnOut,
   ValidateKeyOut,
@@ -121,7 +122,7 @@ export const validateKey = (s: ModelSettings) =>
   });
 
 export const getOutbox = (id: string) =>
-  request<unknown[]>("GET", `/sessions/${encodeURIComponent(id)}/outbox`);
+  request<OutboxMessage[]>("GET", `/sessions/${encodeURIComponent(id)}/outbox`);
 
 export const deleteSession = (id: string) =>
   request<void>("DELETE", `/sessions/${encodeURIComponent(id)}`);
