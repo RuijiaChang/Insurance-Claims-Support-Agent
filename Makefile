@@ -1,5 +1,11 @@
 dev:
-	cd backend && uv run uvicorn app.main:app --reload --port 8000
+	$(MAKE) -j2 dev-backend dev-frontend
+
+dev-backend:
+	cd backend && set -a; [ -f ../.env ] && . ../.env; set +a; uv run uvicorn app.main:app --reload --port 8000
+
+dev-frontend:
+	cd frontend && npm run dev
 
 test:
 	cd backend && uv run pytest
@@ -13,4 +19,4 @@ docker:
 eval:
 	cd backend && uv run python -m app.eval
 
-.PHONY: dev test lint docker eval
+.PHONY: dev dev-backend dev-frontend test lint docker eval
