@@ -176,3 +176,12 @@ def test_amount_whitelist_ignores_date_and_id_digits(repo: FixtureRepo) -> None:
 def test_ssn_space_separated(repo: FixtureRepo) -> None:
     r = check_reply("SSN 123 45 6789", _state(True), _rctx(facts=FACTS), repo)
     assert "pii_echo:ssn" in r.violations
+
+
+def test_pre_access_normalized_record_dates_and_amounts(repo: FixtureRepo) -> None:
+    state = _state(False, Phase.VERIFY_ID)
+    for text in ("18 March 2026", "3/18/2026", "Mar 18, 2026", "1450.0", "15 March 1985"):
+        assert not check_reply(text, state, _rctx(Phase.VERIFY_ID), repo).ok, text
+    assert check_reply(
+        "18 March 2026", state, _rctx(Phase.VERIFY_ID, user_text="My deadline is 2026-03-18"), repo
+    ).ok

@@ -78,3 +78,12 @@ def test_last4_year_like_allowed_after_strong_keyword() -> None:
 
 def test_dob_last_match_wins_for_corrections() -> None:
     assert extract_regex("DOB 1985-03-16, sorry, 1985-03-15").dob_raw == "1985-03-15"
+
+
+def test_dob_numeric_separators_and_compact_policy() -> None:
+    for value in ("03-15-1985", "1985/03/15"):
+        hits = extract_regex(f"DOB {value}, national ID last four 6688, POL9921")
+        assert hits.dob_raw == value
+        assert parse_dob(hits.dob_raw) == [date(1985, 3, 15)]
+        assert hits.id_last4 == "6688"
+        assert hits.policy_number == "POL9921"

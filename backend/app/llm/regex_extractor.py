@@ -10,8 +10,8 @@ _MONTHS = (
     r"Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
 )
 _DOB_PATTERNS = [
-    re.compile(r"(?<![\d/-])\d{4}-\d{1,2}-\d{1,2}(?![\d/-])"),
-    re.compile(r"(?<![\d/])\d{1,2}/\d{1,2}/\d{2,4}(?![\d/])"),
+    re.compile(r"(?<![\d/-])\d{4}[-/]\d{1,2}[-/]\d{1,2}(?![\d/-])"),
+    re.compile(r"(?<![\d/-])\d{1,2}[-/]\d{1,2}[-/]\d{2,4}(?![\d/-])"),
     re.compile(rf"\b{_MONTHS}\.?\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+\d{{4}}\b", re.IGNORECASE),
     re.compile(rf"\b\d{{1,2}}(?:st|nd|rd|th)?\s+{_MONTHS}\.?,?\s+\d{{4}}\b", re.IGNORECASE),
 ]
@@ -22,7 +22,7 @@ _YEAR_LIKE = re.compile(r"(?:19|20)\d\d$")
 _KEYWORD_FILLER = re.compile(r"[\s:=#,-]*(?:(?:is|are|digits|last|four|4|number|of)\b[\s:=#,-]*)*")
 _LAST4_WINDOW = 30
 _LAST4_DIGITS = re.compile(r"(?<![\w-])\d{4}(?![\w]|-\d)")
-_POLICY = re.compile(r"\bPOL-\d+\b", re.IGNORECASE)
+_POLICY = re.compile(r"\bPOL-?\d+\b", re.IGNORECASE)
 _CASE = re.compile(r"\bCL-\d+\b", re.IGNORECASE)
 
 
