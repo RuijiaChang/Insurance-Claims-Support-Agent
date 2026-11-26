@@ -1,15 +1,19 @@
-"""Test helpers: policy context, extraction builder, transition applier."""
+"""Test helpers: policy context, extraction builder, transition applier, fake LLMs, engine."""
 
 from datetime import date
 from typing import Any, Literal
 
 from app.data.repo import FixtureRepo
+from app.llm.base import ExtractContext, LLMBundle, LLMError, LLMErrorKind
 from app.settings import SopConfig
 from app.sop import phases
+from app.sop.context import ResponderContext
 from app.sop.email_summary import EmailDraft
+from app.sop.engine import Engine
 from app.sop.extraction import Extraction
 from app.sop.plan import PolicyCtx, StepResult
 from app.sop.state import SessionState
+from app.sop.templates import render
 from app.tools.email import Outbox
 
 
@@ -50,3 +54,48 @@ def ex(**kw: Any) -> Extraction:
 def apply_step(state: SessionState, step: StepResult) -> None:
     if step.transition is not None:
         phases.transition(state, *step.transition)
+
+
+class FakeExtractor:
+    """Returns the scripted extraction for the exact text, else an empty one."""
+
+    def __init__(
+        self, script: dict[str, Extraction], raise_kind: LLMErrorKind | None = None
+    ) -> None:
+        self.script = script
+        self.raise_kind = raise_kind
+        self.calls: list[ExtractContext] = []
+
+    def extract(self, text: str, ectx: ExtractContext) -> Extraction:
+        self.calls.append(ectx)
+        if self.raise_kind is not None:
+            raise LLMError(self.raise_kind, "fake extractor failure")
+        hit = self.script.get(text)
+        return hit.model_copy(deep=True) if hit is not None else Extraction.empty()
+
+
+class TemplateResponder:
+    """Deterministic responder: renders the directive templates; records every context."""
+
+    def __init__(self) -> None:
+        self.contexts: list[ResponderContext] = []
+
+    def respond(self, rctx: ResponderContext, feedback: list[str] | None = None) -> str:
+        self.contexts.append(rctx)
+        return render(rctx.directives, rctx)
+
+
+class FakeEmailComposer(PassThroughComposer):
+    """Returns the deterministic draft unchanged."""
+
+
+def make_bundle(script: dict[str, Extraction], raise_kind: LLMErrorKind | None = None) -> LLMBundle:
+    return LLMBundle(
+        extractor=FakeExtractor(script, raise_kind),
+        responder=TemplateResponder(),
+        email_composer=FakeEmailComposer(),
+    )
+
+
+def make_engine(repo: FixtureRepo, sop: SopConfig, *, today: date = date(2026, 3, 5)) -> Engine:
+    return Engine(repo, sop, today, Outbox(None))

@@ -129,6 +129,8 @@ def _case_facts(state: SessionState, plan: TurnPlan, ctx: PolicyCtx) -> dict[str
             else None
         ),
         "doc_requirements": asdict(requirements),
+        # What the caller asked about this turn; lets templates pick the relevant claim fields.
+        "turn_intent": state.turn_intent,
     }
     answer = next((d for d in reversed(plan.directives) if d.kind == "answer_question"), None)
     if answer is not None:
