@@ -124,9 +124,11 @@ async def _resolve(headers: LLMHeaders, settings: Settings) -> ProviderConfig:
 def _client_ip(request: Request) -> str:
     settings: Settings = request.app.state.settings
     if settings.trust_proxy:
-        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        if forwarded:
-            return forwarded
+        # The proxy appends the real peer on the right; anything left of it is client-supplied.
+        entries = [e.strip() for e in request.headers.get("x-forwarded-for", "").split(",")]
+        entries = [e for e in entries if e]
+        if entries:
+            return entries[-1]
     return request.client.host if request.client is not None else "unknown"
 
 
@@ -232,18 +234,21 @@ async def post_event(session_id: str, body: EventIn, request: Request) -> TurnOu
 
 
 @router.get("/sessions/{session_id}/state")
-def get_state(session_id: str, request: Request) -> dict[str, Any]:
-    return public_snapshot(_session(request, session_id))
+async def get_state(session_id: str, request: Request) -> dict[str, Any]:
+    state = _session(request, session_id)
+    async with request.app.state.sessions.lock(session_id):
+        return public_snapshot(state)
 
 
 @router.get("/sessions/{session_id}/transcript")
-def get_transcript(session_id: str, request: Request) -> dict[str, Any]:
+async def get_transcript(session_id: str, request: Request) -> dict[str, Any]:
     state = _session(request, session_id)
-    return {
-        "session_id": state.session_id,
-        "transcript": [m.model_dump(mode="json") for m in list(state.transcript)],
-        "events": [e.model_dump(mode="json") for e in list(state.events)],
-    }
+    async with request.app.state.sessions.lock(session_id):
+        return {
+            "session_id": state.session_id,
+            "transcript": [m.model_dump(mode="json") for m in state.transcript],
+            "events": [e.model_dump(mode="json") for e in state.events],
+        }
 
 
 @router.get("/sessions/{session_id}/outbox")

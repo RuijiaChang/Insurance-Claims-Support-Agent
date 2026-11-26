@@ -426,15 +426,64 @@ def test_s24_client_model_ignored_with_server_key() -> None:
     assert SERVER_KEY not in r.text
 
 
-def test_rate_limit_keyed_by_forwarded_ip_only_when_trusted() -> None:
-    for trust, expected in ((False, 429), (True, 200)):
-        client, _ = _app(trust_proxy=trust)
-        client.app.state.limiter = SlidingWindowLimiter(1, 300, 3000)  # type: ignore[attr-defined]
-        sid = _new(client)
-        h = {"X-Forwarded-For": "203.0.113.1, 10.0.0.1"}
-        assert _say(client, sid, "hello", **h).status_code == 200
-        h = {"X-Forwarded-For": "203.0.113.2"}
-        assert _say(client, sid, "hello", **h).status_code == expected
+def _limited_app(**kw: Any) -> tuple[TestClient, str]:
+    client, _ = _app(**kw)
+    client.app.state.limiter = SlidingWindowLimiter(1, 300, 3000)  # type: ignore[attr-defined]
+    return client, _new(client)
+
+
+def test_trusted_proxy_keys_on_rightmost_forwarded_entry() -> None:
+    client, sid = _limited_app(trust_proxy=True)
+    # Spoofed leftmost values rotate; the proxy-appended rightmost value is the real client.
+    h1 = {"X-Forwarded-For": "1.1.1.1, 203.0.113.9"}
+    h2 = {"X-Forwarded-For": "2.2.2.2 ,  203.0.113.9 "}
+    assert _say(client, sid, "hello", **h1).status_code == 200
+    assert _say(client, sid, "hello", **h2).status_code == 429
+    # A different real client (rightmost) has its own bucket.
+    h3 = {"X-Forwarded-For": "1.1.1.1, 198.51.100.7"}
+    assert _say(client, sid, "hello", **h3).status_code == 200
+
+
+def test_trusted_proxy_falls_back_to_peer_without_header() -> None:
+    client, sid = _limited_app(trust_proxy=True)
+    assert _say(client, sid, "hello", **{"X-Forwarded-For": " , "}).status_code == 200
+    assert _say(client, sid, "hello").status_code == 429  # same peer (testclient)
+
+
+def test_untrusted_proxy_ignores_forwarded_header() -> None:
+    client, sid = _limited_app(trust_proxy=False)
+    assert _say(client, sid, "hello", **{"X-Forwarded-For": "203.0.113.1"}).status_code == 200
+    assert _say(client, sid, "hello", **{"X-Forwarded-For": "203.0.113.2"}).status_code == 429
+
+
+def test_empty_key_header_counts_as_server_key() -> None:
+    client, sid = _limited_app()
+    assert _say(client, sid, "hello", **{"X-OpenAI-Key": ""}).status_code == 200
+    r = _say(client, sid, "hello", **{"X-OpenAI-Key": ""})
+    assert r.status_code == 429 and r.json() == {"code": "demo_quota_exceeded"}
+
+
+def test_state_and_transcript_wait_for_running_turn() -> None:
+    slow = SlowResponder()
+    client, _ = _app(Recorder(responder=slow))
+    app = client.app
+    sid = _new(client)
+
+    async def run() -> tuple[int, int]:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            turn = asyncio.create_task(
+                ac.post(f"/api/sessions/{sid}/messages", json={"text": "hello"})
+            )
+            await asyncio.sleep(0.01)  # the turn holds the lock and sleeps in the responder
+            state, transcript = await asyncio.gather(
+                ac.get(f"/api/sessions/{sid}/state"), ac.get(f"/api/sessions/{sid}/transcript")
+            )
+            await turn
+            return state.json()["counters"]["turns"], len(transcript.json()["transcript"])
+
+    turns, messages = asyncio.run(run())
+    assert (turns, messages) == (1, 3)  # read after the turn completed, never mid-turn
 
 
 def test_sliding_window_limiter() -> None:
