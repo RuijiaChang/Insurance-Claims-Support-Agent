@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     outbox_dir: Path | None = None
     log_level: str = "INFO"
     sop_config_path: Path = _APP_DIR / "config" / "sop.yaml"
+    frontend_dir: Path = Path(__file__).resolve().parents[2] / "frontend/dist"
+    # Behind a reverse proxy (e.g. Render), key rate limits on the first X-Forwarded-For entry.
+    trust_proxy: bool = False
 
 
 class VerificationConfig(BaseModel):
