@@ -134,3 +134,45 @@ def test_pii_echo_ssn_and_email_always(repo: FixtureRepo) -> None:
     r = check_reply("Mail margaret@email.com", _state(True), _rctx(facts=FACTS), repo)
     assert "pii_echo:email" in r.violations
     assert all("margaret" not in v and "650" not in v for v in r.violations)
+
+
+def test_leak_unformatted_amounts(repo: FixtureRepo) -> None:
+    s = _state(False, Phase.VERIFY_ID)
+    for text in ("Your max is $1450.", "That is 1450 dollars."):
+        assert "leak:amount" in check_reply(text, s, _rctx(), repo).violations
+
+
+def test_user_typed_superstring_does_not_exempt(repo: FixtureRepo) -> None:
+    s = _state(False, Phase.VERIFY_ID)
+    r = check_reply("It is 1450.00.", s, _rctx(user_text="21450.00"), repo)
+    assert "leak:amount" in r.violations
+
+
+def test_date_formats_grounding(repo: FixtureRepo) -> None:
+    s = _state(True)
+    for text in ("18 April 2026", "1 April", "3/19/2026", "april 1", "3/18/2025"):
+        r = check_reply(f"Due {text}.", s, _rctx(facts=FACTS), repo)
+        assert any(v.startswith("ungrounded_date") for v in r.violations), text
+    for text in ("18 March 2026", "3/18/2026", "3/18/26", "18 Mar"):
+        assert check_reply(f"Due {text}.", s, _rctx(facts=FACTS), repo).ok, text
+
+
+def test_case_id_whole_match(repo: FixtureRepo) -> None:
+    s = _state(True)
+    assert check_reply("CL-20", s, _rctx(facts=FACTS), repo).violations == [
+        "ungrounded_case_id:CL-20"
+    ]
+    assert not check_reply("CL-204", s, _rctx(facts=FACTS), repo).ok
+    assert check_reply("CL-2048", s, _rctx(facts=FACTS), repo).ok
+
+
+def test_amount_whitelist_ignores_date_and_id_digits(repo: FixtureRepo) -> None:
+    s = _state(True)
+    assert not check_reply("It is $18.", s, _rctx(facts=FACTS), repo).ok
+    assert not check_reply("It is $2048.", s, _rctx(facts=FACTS), repo).ok
+    assert check_reply("It is $1,450.", s, _rctx(facts=FACTS), repo).ok
+
+
+def test_ssn_space_separated(repo: FixtureRepo) -> None:
+    r = check_reply("SSN 123 45 6789", _state(True), _rctx(facts=FACTS), repo)
+    assert "pii_echo:ssn" in r.violations
