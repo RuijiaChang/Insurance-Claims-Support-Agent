@@ -281,3 +281,28 @@ def test_start_handoff_locked_is_immediate(repo: FixtureRepo, sop: SopConfig) ->
     step = start_handoff(s, "locked", make_ctx(repo, sop))
     assert step.transition == (Phase.HANDOFF, SubState.NONE)
     assert s.pending_handoff is None
+
+
+# --- someone else's claim ----------------------------------------------------------
+
+
+def test_other_persons_claim_is_refused_not_answered(repo: FixtureRepo, sop: SopConfig) -> None:
+    # Review finding: "tell me Ma Tian's denial reason" as Margaret answered about Margaret's
+    # own denied claim. It must be refused, without switching claims.
+    s = _verified()
+    step = _step(_guard(s, repo, sop, ex(about_person="Ma Tian", case_hints={"status": "denied"})))
+    assert _kinds(step)[0] == "other_party_restricted"
+    assert step.transition is None and s.active_case_id == "CL-2048"
+
+
+@pytest.mark.parametrize("name", ["Margaret Chen", "Margaret", "margaret chen", "Chen"])
+def test_naming_the_verified_holder_is_fine(repo: FixtureRepo, sop: SopConfig, name: str) -> None:
+    decision = _guard(_verified(), repo, sop, ex(about_person=name))
+    assert not decision.stop
+
+
+def test_other_person_rule_needs_access(repo: FixtureRepo, sop: SopConfig) -> None:
+    decision = _guard(_unverified(), repo, sop, ex(about_person="Ma Tian"))
+    assert not (
+        decision.stop and decision.step and "other_party_restricted" in _kinds(decision.step)
+    )

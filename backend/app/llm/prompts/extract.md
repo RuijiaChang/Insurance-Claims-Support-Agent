@@ -42,6 +42,9 @@ Only for representatives, else null:
 - `relationship`: the caller's relationship TO the policyholder: one of `child`, `parent`, `spouse`, `sibling`, `other`. Direction matters: "my mom's claim" / "calling for my mother" → the caller is her `child`; "my son's claim" → the caller is his `parent`; "my wife" / "my husband" / "my partner" → `spouse`; "my brother/sister" → `sibling`; anyone else (friend, caregiver, lawyer) → `other`.
 - `policyholder_name`: the policyholder's name, if said.
 
+## about_person
+The name of the person whose claim or account they are asking about, only when they name someone ("what about Ma Tian's claim?" → "Ma Tian"; "my mom Margaret Chen's claim" → "Margaret Chen"). Null when they don't name anyone or only say "my claim" / "her claim".
+
 ## case_hints
 Anything the caller said that identifies which claim they mean:
 - `case_id`: e.g. "CL-0000", verbatim.
@@ -105,18 +108,18 @@ Every act present in the message (several are allowed, in any order):
 
 # Output
 
-Output only a JSON object with exactly these keys: `identity` (object with `full_name`, `dob`, `phone`, `email`, `id_last4`, `policy_number`), `refused_fields` (array), `caller_role`, `representative` (object or null), `case_hints` (object with `case_id`, `case_type`, `status`, `month`, `year`, `free_text`), `intent`, `guidance_topic`, `question`, `acts` (array), `scope`, `emotion` (object with `label`, `intensity`), `email_preference`. Use null for anything not said.
+Output only a JSON object with exactly these keys: `identity` (object with `full_name`, `dob`, `phone`, `email`, `id_last4`, `policy_number`), `refused_fields` (array), `caller_role`, `representative` (object or null), `case_hints` (object with `case_id`, `case_type`, `status`, `month`, `year`, `free_text`), `intent`, `guidance_topic`, `question`, `acts` (array), `scope`, `emotion` (object with `label`, `intensity`), `email_preference`, `about_person`. Use null for anything not said.
 
 # Example
 
 Input user_message: "I'm the policyholder. My name is Jane Doe, policy POL-0000. I'm calling about my denied healthcare claim from January. DOB is July 4, 1970, SSN last four is 1234, email jane@example.com."
 
 Output:
-{"identity": {"full_name": "Jane Doe", "dob": "July 4, 1970", "phone": null, "email": "jane@example.com", "id_last4": "1234", "policy_number": "POL-0000"}, "refused_fields": [], "caller_role": "policyholder", "representative": null, "case_hints": {"case_id": null, "case_type": "healthcare", "status": "denied", "month": 1, "year": null, "free_text": "my denied healthcare claim from January"}, "intent": "denial_question", "guidance_topic": null, "question": null, "acts": ["provide_info"], "scope": "in_scope_claim", "emotion": {"label": "neutral", "intensity": 0}, "email_preference": null}
+{"identity": {"full_name": "Jane Doe", "dob": "July 4, 1970", "phone": null, "email": "jane@example.com", "id_last4": "1234", "policy_number": "POL-0000"}, "refused_fields": [], "caller_role": "policyholder", "representative": null, "case_hints": {"case_id": null, "case_type": "healthcare", "status": "denied", "month": 1, "year": null, "free_text": "my denied healthcare claim from January"}, "intent": "denial_question", "guidance_topic": null, "question": null, "acts": ["provide_info"], "scope": "in_scope_claim", "emotion": {"label": "neutral", "intensity": 0}, "email_preference": null, "about_person": null}
 
 Input user_message: "I'm so stressed, my mother is in the hospital and my claim was denied! I'm Sam Lee."
 
 Output:
-{"identity": {"full_name": "Sam Lee", "dob": null, "phone": null, "email": null, "id_last4": null, "policy_number": null}, "refused_fields": [], "caller_role": "policyholder", "representative": null, "case_hints": {"case_id": null, "case_type": null, "status": "denied", "month": null, "year": null, "free_text": "my claim was denied"}, "intent": "denial_question", "guidance_topic": null, "question": null, "acts": ["provide_info"], "scope": "in_scope_claim", "emotion": {"label": "anxious", "intensity": 2}, "email_preference": null}
+{"identity": {"full_name": "Sam Lee", "dob": null, "phone": null, "email": null, "id_last4": null, "policy_number": null}, "refused_fields": [], "caller_role": "policyholder", "representative": null, "case_hints": {"case_id": null, "case_type": null, "status": "denied", "month": null, "year": null, "free_text": "my claim was denied"}, "intent": "denial_question", "guidance_topic": null, "question": null, "acts": ["provide_info"], "scope": "in_scope_claim", "emotion": {"label": "anxious", "intensity": 2}, "email_preference": null, "about_person": null}
 
 (It is *their* claim; the mother is only context. Compare "I'm calling about my mother's claim", which is a representative.)

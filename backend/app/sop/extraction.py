@@ -130,6 +130,8 @@ class Extraction(BaseModel):
     )
     emotion: Emotion = Field(default_factory=Emotion)
     email_preference: Literal["send", "skip"] | None = None
+    # The person whose claim they ask about, when they name someone ("Ma Tian's claim").
+    about_person: str | None = None
 
     @classmethod
     def empty(cls) -> "Extraction":
@@ -222,6 +224,14 @@ def _ground_case_hints(h: CaseHints, text: str) -> CaseHints:
     )
 
 
+# Words a request for a person has to contain; "write me a poem" is not one.
+_HUMAN_REQUEST = re.compile(
+    r"\b(human|person|people|someone|somebody|agent|rep|representative|supervisor|manager|"
+    r"operator|staff|transfer|escalate|real|live|call me|speak|talk)\b",
+    re.IGNORECASE,
+)
+
+
 def reconcile(llm: Extraction | None, hits: RegexHits, user_text: str) -> Extraction:
     """Merge LLM extraction with regex hits; inputs are never mutated.
 
@@ -238,6 +248,10 @@ def reconcile(llm: Extraction | None, hits: RegexHits, user_text: str) -> Extrac
     # listed ("the second one"): then the hints legitimately come from the agent's message.
     if "select_case" not in out.acts:
         out.case_hints = _ground_case_hints(out.case_hints, user_text)
+    if "request_human" in out.acts and not _HUMAN_REQUEST.search(user_text):
+        out.acts = [a for a in out.acts if a != "request_human"]
+    if out.about_person and not _grounded("full_name", out.about_person, user_text):
+        out.about_person = None
     if hits.dob_raw:
         out.identity.dob = hits.dob_raw
     if hits.phone:

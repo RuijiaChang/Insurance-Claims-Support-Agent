@@ -55,6 +55,7 @@ DirectiveKind = Literal[
     "answer_general",
     "small_talk",
     "session_closed",
+    "other_party_restricted",
 ]
 
 FactScope = Literal["none", "claims_summary", "case", "email"]

@@ -23,6 +23,8 @@ Guards never change phase themselves: any change is returned through
 
 from dataclasses import dataclass, field
 
+from rapidfuzz import fuzz
+
 from app.sop.extraction import Extraction
 from app.sop.phases import Phase, SubState
 from app.sop.plan import Directive, PolicyCtx, QuickReply, StepResult
@@ -32,6 +34,7 @@ from app.sop.state import SessionState
 from app.tools.claims import claim_summary_line
 from app.tools.guidance import kb_general
 from app.tools.handoff import HandoffReason
+from app.tools.identity import normalize_name
 
 OFF_TOPIC_REPLIES = [
     QuickReply(label="Talk to a representative", action="handoff_accept"),
@@ -95,12 +98,28 @@ def apply_global_guards(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> 
         state.pending_question = None
         return _stop(state, start_handoff(state, reason, ctx), ctx)
 
-    # 3. Scope. A turn carrying identity or case data is in scope whatever its label.
+    # 3. Someone else's claim: after access the conversation is about the verified
+    #    policy only. Refuse instead of answering about the caller's own claim.
+    if (
+        state.access_granted
+        and ex.about_person
+        and not _is_verified_holder(state, ex.about_person, ctx)
+    ):
+        return _stop(
+            state,
+            StepResult(
+                directives=[Directive(kind="other_party_restricted"), *_pull_back(state, ctx)],
+                quick_replies=[],
+            ),
+            ctx,
+        )
+
+    # 4. Scope. A turn carrying identity or case data is in scope whatever its label.
     has_claim_data = _has_claim_data(ex)
     if ex.scope == "out_of_scope" and not has_claim_data:
         return _stop(state, _decline_off_topic(state, ctx), ctx)
 
-    # 4. Not off-topic: the consecutive run is broken.
+    # 5. Not off-topic: the consecutive run is broken.
     state.counters.off_topic_consecutive = 0
     extra: list[Directive] = []
     if ex.scope == "in_scope_general":
@@ -118,7 +137,7 @@ def apply_global_guards(state: SessionState, ex: Extraction, ctx: PolicyCtx) -> 
     elif ex.scope == "small_talk":
         extra.append(Directive(kind="small_talk"))
 
-    # 5. Emotion.
+    # 6. Emotion.
     emotion, replies = emotion_directives(
         state, ex, gate_for(state), ctx.sop.emotion, system_event=ctx.event is not None
     )
@@ -137,6 +156,23 @@ def _handoff_reason(state: SessionState, offer_reason: HandoffReason | None) -> 
     ):
         return "docs_exhausted"
     return "user_request"
+
+
+def _is_verified_holder(state: SessionState, name: str, ctx: PolicyCtx) -> bool:
+    """Does ``name`` refer to the verified policyholder (full name, alias or part of one)?"""
+    if state.verified_party_id is None:
+        return False
+    holder = ctx.repo.holder(state.verified_party_id)
+    said = normalize_name(name).split()
+    for known in (holder.name, *holder.name_aliases):
+        tokens = normalize_name(known).split()
+        if said and all(t in tokens for t in said):
+            return True
+        if fuzz.token_sort_ratio(" ".join(said), " ".join(tokens)) >= (
+            ctx.sop.verification.name_fuzzy_threshold
+        ):
+            return True
+    return False
 
 
 def _has_claim_data(ex: Extraction) -> bool:

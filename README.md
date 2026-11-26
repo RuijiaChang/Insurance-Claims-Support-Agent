@@ -38,7 +38,7 @@ No key is needed because a capped demo key is built in. Pick a scenario in the t
 | **Memory across phases** | Each claim hint, intent, and email preference is a slot that records the turn and phase where it was captured and later used. You can watch this in the Inspector. |
 | **Grounded answers** | Every reply goes through an output guard that checks for leaks, unsupported amounts, dates and claim IDs, echoed PII, and required content. A failing reply is retried once and then replaced by a deterministic template. |
 | **Beyond the brief** | Representative consent with polling and timeout, graded emotional support, email preview with a mock Outbox, human handoff tickets, deadline math, and document alternatives. |
-| **Evidence** | 560 backend tests, 54 frontend tests, and 8 of 8 live-model scripts passing on `gpt-4.1-mini` with zero leaks ([report](backend/evals/results/REPORT.md)). |
+| **Evidence** | 569 backend tests, 54 frontend tests, and 8 of 8 live-model scripts passing on `gpt-4.1-mini` with zero leaks ([report](backend/evals/results/REPORT.md)). |
 
 ## Quick start
 
@@ -95,7 +95,7 @@ flowchart TD
     class M,P,C,G,T code;
 ```
 
-If the model is down, misconfigured, or out of quota, the pipeline still runs. Regex extraction and templates keep the SOP working, and the UI shows a one-line notice naming the cause (`test_llm_failure_falls_back_to_regex_and_templates`).
+If the model is down, misconfigured, or out of quota, the pipeline degrades instead of failing. Regex still reads formatted fields (DOB, phone, email, last-four digits, policy and claim numbers), templates phrase every reply, and the UI shows a one-line notice naming the cause (`test_llm_failure_falls_back_to_regex_and_templates`). A caller who gives three formatted fields can still verify and be served. Free-form understanding, such as names, claim descriptions and emotion, needs the model.
 
 ### The SOP as a state machine
 
@@ -227,7 +227,7 @@ The [demo script](docs/DEMO_SCRIPT.md) lists the inputs and the expected results
 ## Tests and live evaluation
 
 ```sh
-(cd backend && uv run pytest -q)                      # 560 tests
+(cd backend && uv run pytest -q)                      # 569 tests
 (cd frontend && npm test -- --run && npm run build)   # 54 tests
 make lint && (cd frontend && npm run lint)           # ruff, mypy, eslint
 make eval                                             # live model, needs a key in .env
@@ -250,6 +250,8 @@ make eval                                             # live model, needs a key 
 - The demo is English-only. The output guard checks detectable tokens (amounts, dates, IDs, PII, required phrases), which is not a proof of semantic grounding.
 - The number of in-memory sessions is not capped, and `/api/config/validate-key` is not rate-limited (demo scope).
 - For custom endpoints, DNS validation and the connection resolve separately, which leaves a DNS-rebinding window. Proxy IP handling assumes one trusted proxy.
+- On the representative path, correct policyholder details move on to the representative check, so a caller learns that the details matched before being refused as unregistered. This is the same signal any successful verification gives. Wrong details and unknown people still get one identical reply.
+- The mock consent sequence advances on every poll and every caller message, so in the demo approval arrives after a fixed number of steps rather than on a real policyholder action.
 
 ## Further reading
 

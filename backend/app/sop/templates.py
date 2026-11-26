@@ -437,6 +437,15 @@ def _small_talk(data: dict[str, Any], rctx: ResponderContext, ds: list[Directive
     return "Happy to chat for a moment — I'm here to help with your insurance claims."
 
 
+def _other_party_restricted(
+    data: dict[str, Any], rctx: ResponderContext, ds: list[Directive]
+) -> str:
+    return (
+        "I can only discuss the claims on the verified policy, so I can't share anything "
+        "about another person's claims."
+    )
+
+
 def _session_closed(data: dict[str, Any], rctx: ResponderContext, ds: list[Directive]) -> str:
     if data.get("reason") == "max_turns":
         return (
@@ -491,6 +500,7 @@ TEMPLATES: dict[DirectiveKind, Template] = {
     "answer_general": _answer_general,
     "small_talk": _small_talk,
     "session_closed": _session_closed,
+    "other_party_restricted": _other_party_restricted,
 }
 
 

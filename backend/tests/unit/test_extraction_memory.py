@@ -230,3 +230,20 @@ def test_reconcile_drops_hint_fields_carried_over_from_context() -> None:
     )
     out = reconcile(llm, RegexHits(), "Is there an appeal deadline on my denied one?")
     assert out.case_hints == CaseHints(status="denied", free_text="my denied one")
+
+
+def test_reconcile_drops_about_person_the_caller_did_not_name() -> None:
+    out = reconcile(Extraction(about_person="Ma Tian"), RegexHits(), "what about her claim?")
+    assert out.about_person is None
+    out = reconcile(Extraction(about_person="Ma Tian"), RegexHits(), "and Ma Tian's claim?")
+    assert out.about_person == "Ma Tian"
+
+
+def test_reconcile_drops_request_human_without_a_request_for_a_person() -> None:
+    # Live: gpt-4.1-mini labelled "Write me a poem" as request_human, ending the session.
+    out = reconcile(Extraction(acts=["request_human"]), RegexHits(), "Write me a poem")
+    assert out.acts == []
+    for text in ("Can I talk to a human?", "transfer me please", "I want a real person"):
+        assert reconcile(Extraction(acts=["request_human"]), RegexHits(), text).acts == [
+            "request_human"
+        ]
