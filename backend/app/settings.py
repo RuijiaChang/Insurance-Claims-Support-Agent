@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pydantic_settings import BaseSettings
 
 _APP_DIR = Path(__file__).resolve().parent
@@ -22,8 +22,24 @@ class Settings(BaseSettings):
     outbox_dir: Path | None = None
     log_level: str = "INFO"
     sop_config_path: Path = _APP_DIR / "config" / "sop.yaml"
+
+    @field_validator(
+        "openai_api_key",
+        "openai_base_url",
+        "openai_model",
+        "outbox_dir",
+        "demo_today",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_none(cls, v: object) -> object:
+        # `.env.example` ships blank values such as `OPENAI_BASE_URL=`; treat them as unset.
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
     frontend_dir: Path = Path(__file__).resolve().parents[2] / "frontend/dist"
-    # Behind a reverse proxy (e.g. Render), key rate limits on the first X-Forwarded-For entry.
+    # With one trusted proxy, key rate limits on the rightmost X-Forwarded-For entry.
     trust_proxy: bool = False
 
 

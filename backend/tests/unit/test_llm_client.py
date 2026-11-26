@@ -357,3 +357,25 @@ def test_structured_parse_sdk_errors_wrapped() -> None:
     with pytest.raises(LLMError) as ei:
         c.parse([{"role": "user", "content": "x"}], Out)
     assert ei.value.kind == "other"
+
+
+def test_blank_base_url_env_does_not_leak_into_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_BASE_URL", "")
+    c, reqs, _ = _make(lambda r, n: httpx.Response(200, json=_completion("hi")))
+    c.chat([{"role": "user", "content": "x"}])
+    assert str(reqs[0].url) == "https://api.openai.com/v1/chat/completions"
+
+
+def test_blank_env_values_are_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    for k in ("OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "DEMO_TODAY", "OUTBOX_DIR"):
+        monkeypatch.setenv(k, " ")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.openai_api_key is None and s.openai_base_url is None
+    assert s.openai_model is None and s.demo_today is None and s.outbox_dir is None
+    with pytest.raises(MissingApiKey):
+        resolve_provider(LLMHeaders(), s)
+    cfg = resolve_provider(LLMHeaders(api_key="k"), s)
+    assert cfg.model == "gpt-5-mini"
+    monkeypatch.setenv("OPENAI_API_KEY", "srv")
+    cfg = resolve_provider(LLMHeaders(), Settings(_env_file=None))  # type: ignore[call-arg]
+    assert cfg.model == "gpt-5-mini" and cfg.uses_server_key

@@ -24,6 +24,7 @@ T = TypeVar("T", bound=BaseModel)
 ProviderName = Literal["openai", "deepseek", "custom"]
 
 _DEEPSEEK_URL = "https://api.deepseek.com"
+_OPENAI_URL = "https://api.openai.com/v1"
 _DEFAULT_MODELS: dict[str, str] = {"openai": "gpt-5-mini", "deepseek": "deepseek-chat"}
 # name -> (supports_structured, supports_tools)
 _CAPABILITIES: dict[str, tuple[bool, bool]] = {
@@ -179,7 +180,8 @@ class LLMClient:
             http_client = openai.DefaultHttpxClient(follow_redirects=False)
         self._client = OpenAI(
             api_key=cfg.api_key,
-            base_url=cfg.base_url,
+            base_url=cfg.base_url
+            or _OPENAI_URL,  # explicit: never let the SDK read OPENAI_BASE_URL
             http_client=http_client,
             timeout=timeout_s,
             max_retries=0,
