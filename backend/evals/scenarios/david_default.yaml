@@ -1,0 +1,35 @@
+{
+  "name": "david_default",
+  "turns": [
+    {
+      "text": "Hi, I'm David Chen, calling for my mom Margaret Chen. Her DOB is 1985-03-15, SSN last four 4472, policy POL-9921.",
+      "expect": {
+        "sub_state": "CONSENT_PENDING",
+        "access_granted": false
+      }
+    },
+    {
+      "event": "consent_poll",
+      "expect": {
+        "access_granted": false
+      }
+    },
+    {
+      "event": "consent_poll",
+      "expect": {
+        "access_granted": true
+      }
+    },
+    {
+      "text": "Her denied healthcare claim from January",
+      "expect": {
+        "active_case_id": "CL-2048"
+      }
+    }
+  ],
+  "expect": {
+    "final_phase": "PROCESS_CASE",
+    "active_case_id": "CL-2048",
+    "outbox_count": 0
+  }
+}

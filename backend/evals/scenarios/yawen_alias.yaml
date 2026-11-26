@@ -1,0 +1,15 @@
+{
+  "name": "yawen_alias",
+  "turns": [
+    {
+      "text": "This is Yaven Li, email yawen.li@example.com, phone 650-521-2830.",
+      "expect": {
+        "access_granted": true
+      }
+    }
+  ],
+  "expect": {
+    "final_phase": "RESOLVE_INTENT",
+    "outbox_count": 0
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "name": "margaret",
+  "turns": [
+    {
+      "text": "I'm the policyholder. My name is Margaret Chen, policy POL-9921. I'm calling about my denied healthcare claim from January. DOB is 1985-03-15, SSN last four is 4472.",
+      "expect": {
+        "phase": "PROCESS_CASE",
+        "active_case_id": "CL-2048",
+        "contains": [
+          "pathology report"
+        ],
+        "directives": [
+          "confirm_verified",
+          "case_selected",
+          "answer_question"
+        ]
+      }
+    },
+    {
+      "text": "What exactly do I need to send?"
+    },
+    {
+      "text": "How soon do I need to submit?"
+    },
+    {
+      "text": "That's all, thanks",
+      "expect": {
+        "phase": "POST_PROCESS"
+      }
+    },
+    {
+      "action": "email_send"
+    },
+    {
+      "action": "email_confirm"
+    }
+  ],
+  "expect": {
+    "final_phase": "CLOSED",
+    "active_case_id": "CL-2048",
+    "outbox_count": 1,
+    "outbox_contains": [
+      "What we discussed",
+      "Claim status / outcome",
+      "Next steps",
+      "CL-2048",
+      "pathology report",
+      "2026-03-18"
+    ]
+  }
+}

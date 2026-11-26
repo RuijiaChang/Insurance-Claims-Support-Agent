@@ -1,0 +1,27 @@
+{
+  "name": "angry",
+  "turns": [
+    {
+      "text": "Hi, I'm Margaret Chen"
+    },
+    {
+      "text": "I already told you who I am. This is ridiculous. Just tell me why my claim was denied.",
+      "expect": {
+        "phase": "VERIFY_ID",
+        "access_granted": false,
+        "directives": [
+          "empathize",
+          "persuade"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "final_phase": "VERIFY_ID",
+    "outbox_count": 0,
+    "must_not_contain": [
+      "CL-2048",
+      "pathology report"
+    ]
+  }
+}

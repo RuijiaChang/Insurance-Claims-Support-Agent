@@ -1,0 +1,31 @@
+{
+  "name": "off_topic",
+  "turns": [
+    {
+      "text": "What is reinforcement learning?"
+    },
+    {
+      "text": "Write me a Python sorting algorithm."
+    },
+    {
+      "text": "What is the weather in Paris?",
+      "expect": {
+        "actions": [
+          "handoff_accept"
+        ]
+      }
+    },
+    {
+      "action": "handoff_accept"
+    }
+  ],
+  "expect": {
+    "final_phase": "HANDOFF",
+    "handoff_reason": "off_topic",
+    "outbox_count": 0,
+    "must_not_contain": [
+      "CL-2048",
+      "pathology report"
+    ]
+  }
+}

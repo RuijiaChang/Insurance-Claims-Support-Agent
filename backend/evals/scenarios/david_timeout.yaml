@@ -1,0 +1,49 @@
+{
+  "name": "david_timeout",
+  "consent": "timeout",
+  "turns": [
+    {
+      "text": "Hi, I'm David Chen, calling for my mom Margaret Chen. Her DOB is 1985-03-15, SSN last four 4472, policy POL-9921.",
+      "expect": {
+        "sub_state": "CONSENT_PENDING",
+        "access_granted": false
+      }
+    },
+    {
+      "event": "consent_poll"
+    },
+    {
+      "event": "consent_poll"
+    },
+    {
+      "event": "consent_poll"
+    },
+    {
+      "event": "consent_poll"
+    },
+    {
+      "event": "consent_poll",
+      "expect": {
+        "sub_state": "CONSENT_EXPIRED",
+        "access_granted": false,
+        "actions": [
+          "consent_resend",
+          "handoff_accept",
+          "end_session"
+        ]
+      }
+    },
+    {
+      "action": "handoff_accept"
+    }
+  ],
+  "expect": {
+    "final_phase": "HANDOFF",
+    "handoff_reason": "consent_expired",
+    "outbox_count": 0,
+    "must_not_contain": [
+      "CL-2048",
+      "pathology report"
+    ]
+  }
+}

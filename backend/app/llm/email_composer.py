@@ -16,7 +16,7 @@ from app.llm.prompts import load_prompt
 from app.sop.context import ResponderContext
 from app.sop.email_summary import EmailDraft
 from app.sop.phases import Phase
-from app.sop.state import SessionState
+from app.sop.state import SessionState, TraceEvent
 
 SECTION = "What we discussed"
 _MAX_LEN = 600
@@ -41,7 +41,10 @@ class LLMEmailComposer:
         ]
         try:
             message = self.client.chat(messages)
-        except LLMError:
+        except LLMError as error:
+            state.events.append(
+                TraceEvent(turn=state.counters.turns, stage="email_llm_error", summary=error.kind)
+            )
             return draft
         text = " ".join((getattr(message, "content", None) or "").split())
         if not text or len(text) > _MAX_LEN:
@@ -57,7 +60,16 @@ class LLMEmailComposer:
             tool_executor=None,
             whitelist_text=json.dumps(facts),
         )
-        if not check_reply(text, state, rctx, self.repo).ok:
+        guard = check_reply(text, state, rctx, self.repo)
+        if not guard.ok:
+            state.events.append(
+                TraceEvent(
+                    turn=state.counters.turns,
+                    stage="email_guard",
+                    summary="polish rejected",
+                    data={"categories": sorted({v.split(":", 1)[0] for v in guard.violations})},
+                )
+            )
             return draft
         sections = dict(draft.sections)
         sections[SECTION] = [text]

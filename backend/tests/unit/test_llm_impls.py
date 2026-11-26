@@ -330,6 +330,8 @@ def test_email_composer_reverts_on_guard_failure(repo: FixtureRepo) -> None:
     client = StubClient(chat=lambda n, tools: _text("We agreed you will be paid $999.99."))
     out = LLMEmailComposer(client, repo).compose(state, draft)  # type: ignore[arg-type]
     assert out == draft
+    assert state.events[-1].stage == "email_guard"
+    assert state.events[-1].data["categories"] == ["ungrounded_amount"]
 
 
 def test_email_composer_rewrites_only_discussed_section(repo: FixtureRepo) -> None:
@@ -373,6 +375,8 @@ def test_email_composer_reverts_on_llm_error(repo: FixtureRepo) -> None:
 
     out = LLMEmailComposer(StubClient(chat=boom), repo).compose(state, draft)  # type: ignore[arg-type]
     assert out == draft
+    assert state.events[-1].stage == "email_llm_error"
+    assert state.events[-1].summary == "timeout"
 
 
 # --- Factory ----------------------------------------------------------------------

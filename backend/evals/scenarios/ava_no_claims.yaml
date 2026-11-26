@@ -1,0 +1,21 @@
+{
+  "name": "ava_no_claims",
+  "turns": [
+    {
+      "text": "Ava Lopez, DOB 1990-08-21, SSN last 4 is 9180, phone 650-388-2920.",
+      "expect": {
+        "access_granted": true,
+        "contains": [
+          "no claims"
+        ],
+        "directives": [
+          "no_claims"
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "final_phase": "RESOLVE_INTENT",
+    "outbox_count": 0
+  }
+}

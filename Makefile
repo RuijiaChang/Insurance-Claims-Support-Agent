@@ -17,6 +17,6 @@ docker:
 	docker build -t sop-agent .
 
 eval:
-	cd backend && uv run python -m app.eval
+	cd backend && set -a; [ ! -f ../.env ] || . ../.env; set +a; uv run python -m evals.run_evals
 
 .PHONY: dev dev-backend dev-frontend test lint docker eval

@@ -1,0 +1,32 @@
+{
+  "name": "switch_case",
+  "turns": [
+    {
+      "text": "I'm the policyholder. My name is Margaret Chen, policy POL-9921. I'm calling about my denied healthcare claim from January. DOB is 1985-03-15, SSN last four is 4472."
+    },
+    {
+      "text": "And what about my auto claim?",
+      "expect": {
+        "active_case_id": "CL-2102"
+      }
+    },
+    {
+      "text": "That's all, thanks"
+    },
+    {
+      "action": "email_send"
+    },
+    {
+      "action": "email_confirm"
+    }
+  ],
+  "expect": {
+    "final_phase": "CLOSED",
+    "active_case_id": "CL-2102",
+    "outbox_count": 1,
+    "outbox_contains": [
+      "CL-2048",
+      "CL-2102"
+    ]
+  }
+}
