@@ -34,7 +34,7 @@ This maps the assignment to implementation entry points and verification. Python
 
 | Requirement | Implementation | Evidence |
 | --- | --- | --- |
-| 1. Hosted demo or Docker repository with clear setup | `Dockerfile`, `docker-compose.yml`, [README](../README.md), `backend/app/api/routes.py:health` | `tests/test_health.py::test_health_ok`, `tests/api/test_api.py::test_static_frontend_mounted_when_present` |
+| 1. Hosted demo or Docker repository with clear setup | Hosted at <https://sop-insurance-agent.onrender.com> (`render.yaml`); `Dockerfile`, `docker-compose.yml`, [README](../README.md), `backend/app/api/routes.py:health` | `tests/test_health.py::test_health_ok`, `tests/api/test_api.py::test_static_frontend_mounted_when_present` |
 | 2. Accept an API token | `backend/app/llm/client.py:resolve_provider`; `backend/app/api/routes.py:validate_key`; `frontend/src/components/KeyDialog.tsx` | `tests/api/test_api.py::test_client_key_header_used`, `tests/api/test_api.py::test_config_with_server_key`, `tests/api/test_api.py::test_validate_key_ok_uses_request_values` |
 | 3. Natural-language chat UI | `frontend/src/App.tsx:App`; `frontend/src/components/Chat.tsx`; `backend/app/api/routes.py:post_message` | `App.test.tsx` — “fills the composer from a phase suggestion without sending it”; `tests/api/test_api.py::test_message_flow_margaret` |
 | 4. Demonstrate the full workflow | [Demo script](DEMO_SCRIPT.md); `frontend/src/scenarios.ts`; `backend/app/sop/engine.py:Engine.handle_turn` | `tests/scenarios/test_scenarios.py::test_s1_margaret_happy_path`, `tests/api/test_api.py::test_outbox_endpoint_after_send` |

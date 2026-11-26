@@ -4,6 +4,8 @@
 
 This insurance claims support agent follows a fixed four-phase SOP (`VERIFY_ID → RESOLVE_INTENT → PROCESS_CASE → POST_PROCESS`) and still converses naturally. **The SOP lives in code, not in the prompt.** A deterministic policy engine decides the phase, who may see what, and which facts are true. The LLM does only two jobs: it turns messy caller text into structured fields, and it phrases the reply.
 
+**Live demo: <https://sop-insurance-agent.onrender.com>.** No key is needed because a capped demo key is built in. Pick a scenario in the top bar and press **Send**. The demo runs on a free instance, so the first load after a quiet period can take up to a minute while it wakes up.
+
 ![One message: three identity fields verified, the January denied claim the caller mentioned is remembered across phases, resolved to CL-2048, and answered from the record. The Inspector on the right shows the SOP state.](docs/images/hero-verified-in-one-turn.png)
 
 *One caller message carries identity details and a claim description. The engine verifies three fields, remembers the claim description given before verification, resolves it to CL-2048, and answers from the record, all in one turn. The Inspector on the right shows the live SOP state.*
@@ -38,7 +40,7 @@ This insurance claims support agent follows a fixed four-phase SOP (`VERIFY_ID �
 
 ## Quick start
 
-With Docker and Docker Compose installed:
+To try it without installing anything, open the [live demo](https://sop-insurance-agent.onrender.com). To run it locally with Docker and Docker Compose installed:
 
 ```sh
 cp .env.example .env          # optionally set OPENAI_API_KEY here
